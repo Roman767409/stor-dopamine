@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:17
+    container_name: stor-dopamine-db
+    environment:
+      POSTGRES_USER: dopamine
+      POSTGRES_PASSWORD: dopamine_dev
+      POSTGRES_DB: dopaminestore
+    ports:
+      - "5433:5432"
+    volumes:
+      - stor_dopamine_data:/var/lib/postgresql/data
+
+volumes:
+  stor_dopamine_data:
