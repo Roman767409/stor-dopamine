@@ -1,5 +1,39 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
+import { useCart } from '../context/CartContext'
+
+function ProductCard({ product }) {
+  const { addToCart } = useCart()
+  const [isAdded, setIsAdded] = useState(false)
+
+  // Через 1,5 с після натискання повертаємо текст кнопки назад
+  useEffect(() => {
+    if (!isAdded) return
+    const timer = setTimeout(() => setIsAdded(false), 1500)
+    return () => clearTimeout(timer)
+  }, [isAdded])
+
+  function handleAdd() {
+    addToCart(product)
+    setIsAdded(true)
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="bg-gray-200 rounded-xl aspect-square w-full" />
+      <h2 className="font-semibold">{product.name}</h2>
+      <p className="text-sm text-gray-600">{product.category}</p>
+      <p className="font-bold">{product.price_dp} DP</p>
+      <button
+        type="button"
+        onClick={handleAdd}
+        className="mt-auto bg-gray-200 hover:bg-gray-300 rounded-full px-6 py-2 text-sm font-medium"
+      >
+        {isAdded ? 'Added ✓' : 'Add to cart'}
+      </button>
+    </div>
+  )
+}
 
 function ShopPage() {
   const [products, setProducts] = useState([])
@@ -31,12 +65,7 @@ function ShopPage() {
       {!isLoading && !error && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {products.map((product) => (
-            <div key={product.id} className="flex flex-col gap-2">
-              <div className="bg-gray-200 rounded-xl aspect-square w-full" />
-              <h2 className="font-semibold">{product.name}</h2>
-              <p className="text-sm text-gray-600">{product.category}</p>
-              <p className="font-bold">{product.price_dp} DP</p>
-            </div>
+            <ProductCard key={product.id} product={product} />
           ))}
         </div>
       )}

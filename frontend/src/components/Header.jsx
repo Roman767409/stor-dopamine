@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import { useCart } from '../context/CartContext'
 
 const links = [
   { href: '/', label: 'Home' },
@@ -8,6 +10,7 @@ const links = [
 
 function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const { totalItems } = useCart()
 
   return (
     <header className="relative border-b border-gray-200">
@@ -19,9 +22,9 @@ function Header() {
         {/* Меню для широких екранів */}
         <nav className="hidden md:flex gap-8 text-sm">
           {links.map((link) => (
-            <a key={link.href} href={link.href}>
+            <Link key={link.href} to={link.href}>
               {link.label}
-            </a>
+            </Link>
           ))}
         </nav>
 
@@ -29,7 +32,14 @@ function Header() {
           <span className="text-sm font-medium whitespace-nowrap">100 000 DP</span>
           <div className="flex shrink-0 items-center gap-2 sm:gap-4">
             <span>♡</span>
-            <span>🛒</span>
+            <Link to="/cart" className="relative" aria-label={`Cart, ${totalItems} items`}>
+              <span>🛒</span>
+              {totalItems > 0 && (
+                <span className="absolute -top-2 -right-3 min-w-5 h-5 px-1 flex items-center justify-center rounded-full bg-green-400 text-white text-xs font-bold">
+                  {totalItems > 99 ? '99+' : totalItems}
+                </span>
+              )}
+            </Link>
             <span>👤</span>
           </div>
 
@@ -52,14 +62,14 @@ function Header() {
       {isMenuOpen && (
         <nav className="md:hidden absolute left-0 right-0 top-full z-10 flex flex-col bg-white border-b border-gray-200 shadow-md">
           {links.map((link) => (
-            <a
+            <Link
               key={link.href}
-              href={link.href}
+              to={link.href}
               className="px-6 py-3 text-sm hover:bg-gray-100"
               onClick={() => setIsMenuOpen(false)}
             >
               {link.label}
-            </a>
+            </Link>
           ))}
         </nav>
       )}
