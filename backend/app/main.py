@@ -1,10 +1,12 @@
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import Depends, FastAPI
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.database import SessionLocal
-from app.models import Product
+from app.auth import create_token, get_current_user, hash_password, verify_password
+from app.database import get_db
+from app.models import Product, User
 
 app = FastAPI()
 
@@ -15,12 +17,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+
+class Credentials(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8)
+
+    @field_validator("password")
+    @classmethod
+    def password_fits_bcrypt(cls, value):
+        if len(value.encode()) > 72:
+            raise ValueError("Password is too long")
+        return value
+
+
+def user_to_dict(user: User):
+    return {
+        "id": user.id,
+        "email": user.email,
+        "balance_dp": user.balance_dp,
+        "total_saved": user.total_saved,
+    }
 
 
 @app.get("/api/health")
@@ -42,3 +58,28 @@ def list_products(db: Session = Depends(get_db)):
         }
         for p in products
     ]
+
+
+@app.post("/api/auth/register", status_code=201)
+def register(data: Credentials, db: Session = Depends(get_db)):
+    email = data.email.lower()
+    if db.scalar(select(User).where(User.email == email)):
+        raise HTTPException(status_code=409, detail="Email already registered")
+    user = User(email=email, password_hash=hash_password(data.password))
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return {"token": create_token(user.id), "user": user_to_dict(user)}
+
+
+@app.post("/api/auth/login")
+def login(data: Credentials, db: Session = Depends(get_db)):
+    user = db.scalar(select(User).where(User.email == data.email.lower()))
+    if user is None or not verify_password(data.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Wrong email or password")
+    return {"token": create_token(user.id), "user": user_to_dict(user)}
+
+
+@app.get("/api/auth/me")
+def me(user: User = Depends(get_current_user)):
+    return user_to_dict(user)
