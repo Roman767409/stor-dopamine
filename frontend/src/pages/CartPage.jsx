@@ -1,9 +1,12 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 import { useCart } from '../context/CartContext'
 
-// Поки що баланс фіксований, як і в шапці; пізніше він прийде з бекенду
-const BALANCE_DP = 100000
+// 95500 -> "95 500"
+function formatDp(amount) {
+  return String(amount).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
+}
 
 function CartItem({ item }) {
   const { removeFromCart, setQuantity } = useCart()
@@ -63,6 +66,31 @@ function CartItem({ item }) {
 
 function CartPage() {
   const { items, totalItems, totalPrice } = useCart()
+  const { user, isLoading } = useAuth()
+
+  // Поки перевіряється сесія, ще невідомо, гість це чи користувач
+  if (isLoading) {
+    return (
+      <main className="max-w-[1100px] mx-auto px-6 py-10">
+        <h1 className="text-3xl font-bold mb-8">Cart</h1>
+      </main>
+    )
+  }
+
+  if (!user) {
+    return (
+      <main className="max-w-[1100px] mx-auto px-6 py-10">
+        <h1 className="text-3xl font-bold mb-8">Cart</h1>
+        <p className="mb-4">Log in to use your cart</p>
+        <Link
+          to="/login"
+          className="inline-block bg-gray-200 hover:bg-gray-300 rounded-full px-6 py-2 font-medium"
+        >
+          Log in
+        </Link>
+      </main>
+    )
+  }
 
   if (items.length === 0) {
     return (
@@ -79,7 +107,8 @@ function CartPage() {
     )
   }
 
-  const notEnoughDp = totalPrice > BALANCE_DP
+  const notEnoughDp = user !== null && totalPrice > user.balance_dp
+  const checkoutDisabled = isLoading || !user || items.length === 0 || notEnoughDp
 
   return (
     <main className="max-w-[1100px] mx-auto px-6 py-10">
@@ -102,14 +131,22 @@ function CartPage() {
         </div>
         <div className="flex justify-between">
           <span className="text-gray-600">Your balance</span>
-          <span className="font-medium whitespace-nowrap">100 000 DP</span>
+          {isLoading ? (
+            <span className="text-gray-400">…</span>
+          ) : user ? (
+            <span className="font-medium whitespace-nowrap">{formatDp(user.balance_dp)} DP</span>
+          ) : (
+            <Link to="/login" className="font-medium underline">
+              Log in to see your balance
+            </Link>
+          )}
         </div>
 
         {notEnoughDp && <p className="text-red-600 font-medium">Not enough DP</p>}
 
         <button
           type="button"
-          disabled={notEnoughDp}
+          disabled={checkoutDisabled}
           className="bg-gray-200 hover:bg-gray-300 rounded-full px-6 py-3 font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-200"
         >
           Checkout

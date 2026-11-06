@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
+import { useAuth } from './AuthContext'
 
-const STORAGE_KEY = 'cart'
 const MIN_QUANTITY = 1
 const MAX_QUANTITY = 99
 
@@ -13,10 +13,17 @@ function clampQuantity(quantity) {
   return Math.min(MAX_QUANTITY, Math.max(MIN_QUANTITY, number))
 }
 
+// Ключ кошика в localStorage; для гостя або під час перевірки сесії ключа немає
+function getStorageKey(user, isLoading) {
+  if (isLoading || !user) return null
+  return `cart:${user.id}`
+}
+
 // Читає кошик із localStorage; якщо щось не так, повертає порожній кошик
-function loadCart() {
+function loadCart(storageKey) {
+  if (!storageKey) return []
   try {
-    const saved = localStorage.getItem(STORAGE_KEY)
+    const saved = localStorage.getItem(storageKey)
     if (!saved) return []
     const parsed = JSON.parse(saved)
     return Array.isArray(parsed) ? parsed : []
@@ -26,19 +33,39 @@ function loadCart() {
 }
 
 export function CartProvider({ children }) {
-  const [items, setItems] = useState(loadCart)
+  const { user, isLoading } = useAuth()
+  const storageKey = getStorageKey(user, isLoading)
 
-  // Після кожної зміни кошика зберігаємо його в localStorage
+  // Ключ і список позицій лежать РАЗОМ: так кошик завжди знає, чий він
+  const [cart, setCart] = useState(() => ({
+    key: storageKey,
+    items: loadCart(storageKey),
+  }))
+
+  // Користувач змінився (вхід, вихід, інший акаунт) — одразу, ще під час
+  // малювання, підміняємо кошик на кошик нового власника.
+  // React перемалює компонент до того, як спрацює будь-який useEffect.
+  if (cart.key !== storageKey) {
+    setCart({ key: storageKey, items: loadCart(storageKey) })
+  }
+
+  // Зберігаємо кошик під ключем ЙОГО власника; гостьовий кошик не зберігаємо
   useEffect(() => {
+    if (!cart.key) return
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
+      localStorage.setItem(cart.key, JSON.stringify(cart.items))
     } catch {
       // Сховище недоступне (наприклад, приватний режим) — кошик просто не збережеться
     }
-  }, [items])
+  }, [cart])
+
+  // Змінює позиції лише тоді, коли кошик комусь належить; для гостя нічого не робить
+  function updateItems(change) {
+    setCart((prev) => (prev.key ? { ...prev, items: change(prev.items) } : prev))
+  }
 
   function addToCart(product) {
-    setItems((prevItems) => {
+    updateItems((prevItems) => {
       const existing = prevItems.find((item) => item.id === product.id)
       if (existing) {
         return prevItems.map((item) =>
@@ -52,11 +79,11 @@ export function CartProvider({ children }) {
   }
 
   function removeFromCart(id) {
-    setItems((prevItems) => prevItems.filter((item) => item.id !== id))
+    updateItems((prevItems) => prevItems.filter((item) => item.id !== id))
   }
 
   function setQuantity(id, quantity) {
-    setItems((prevItems) =>
+    updateItems((prevItems) =>
       prevItems.map((item) =>
         item.id === id ? { ...item, quantity: clampQuantity(quantity) } : item
       )
@@ -64,9 +91,11 @@ export function CartProvider({ children }) {
   }
 
   function clearCart() {
-    setItems([])
+    updateItems(() => [])
   }
 
+  // Поки кошик не підмінено на кошик поточного власника, показуємо порожній
+  const items = cart.key === storageKey ? cart.items : []
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0)
   const totalPrice = items.reduce((sum, item) => sum + item.price_dp * item.quantity, 0)
 

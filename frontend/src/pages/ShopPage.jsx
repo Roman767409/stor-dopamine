@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 import { useCart } from '../context/CartContext'
 
 function ProductCard({ product }) {
   const { addToCart } = useCart()
+  const { user, isLoading } = useAuth()
+  const navigate = useNavigate()
   const [isAdded, setIsAdded] = useState(false)
 
   // Через 1,5 с після натискання повертаємо текст кнопки назад
@@ -14,6 +18,11 @@ function ProductCard({ product }) {
   }, [isAdded])
 
   function handleAdd() {
+    // Гість не має кошика — відправляємо його увійти
+    if (!user) {
+      navigate('/login')
+      return
+    }
     addToCart(product)
     setIsAdded(true)
   }
@@ -27,7 +36,8 @@ function ProductCard({ product }) {
       <button
         type="button"
         onClick={handleAdd}
-        className="mt-auto bg-gray-200 hover:bg-gray-300 rounded-full px-6 py-2 text-sm font-medium"
+        disabled={isLoading}
+        className="mt-auto bg-gray-200 hover:bg-gray-300 rounded-full px-6 py-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-200"
       >
         {isAdded ? 'Added ✓' : 'Add to cart'}
       </button>
