@@ -66,7 +66,7 @@ function Header() {
         <div className="flex shrink-0 items-center gap-2 sm:gap-4 text-lg">
           {!isLoading && user && (
             <span className="text-sm font-medium whitespace-nowrap">
-              {formatDp(user.balance_dp)} DP
+              {formatDp(user.virtual_balance)} DP
             </span>
           )}
           <div className="flex shrink-0 items-center gap-2 sm:gap-4">

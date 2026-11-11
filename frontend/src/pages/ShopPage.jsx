@@ -30,9 +30,9 @@ function ProductCard({ product }) {
   return (
     <div className="flex flex-col gap-2">
       <div className="bg-gray-200 rounded-xl aspect-square w-full" />
-      <h2 className="font-semibold">{product.name}</h2>
+      <h2 className="font-semibold">{product.title}</h2>
       <p className="text-sm text-gray-600">{product.category}</p>
-      <p className="font-bold">{product.price_dp} DP</p>
+      <p className="font-bold">{product.price} DP</p>
       <button
         type="button"
         onClick={handleAdd}

@@ -38,8 +38,8 @@ function CartItem({ item }) {
       <div className="bg-gray-200 rounded-xl w-20 h-20 shrink-0" />
 
       <div className="flex-1 min-w-0">
-        <h2 className="font-semibold truncate">{item.name}</h2>
-        <p className="text-sm text-gray-600">{item.price_dp} DP</p>
+        <h2 className="font-semibold truncate">{item.title}</h2>
+        <p className="text-sm text-gray-600">{item.price} DP</p>
       </div>
 
       <input
@@ -49,7 +49,7 @@ function CartItem({ item }) {
         value={draft}
         onChange={handleChange}
         onBlur={handleBlur}
-        aria-label={`Quantity of ${item.name}`}
+        aria-label={`Quantity of ${item.title}`}
         className="w-16 border border-gray-300 rounded-lg px-2 py-1 text-center"
       />
 
@@ -107,7 +107,7 @@ function CartPage() {
     )
   }
 
-  const notEnoughDp = user !== null && totalPrice > user.balance_dp
+  const notEnoughDp = user !== null && totalPrice > user.virtual_balance
   const checkoutDisabled = isLoading || !user || items.length === 0 || notEnoughDp
 
   return (
@@ -134,7 +134,7 @@ function CartPage() {
           {isLoading ? (
             <span className="text-gray-400">…</span>
           ) : user ? (
-            <span className="font-medium whitespace-nowrap">{formatDp(user.balance_dp)} DP</span>
+            <span className="font-medium whitespace-nowrap">{formatDp(user.virtual_balance)} DP</span>
           ) : (
             <Link to="/login" className="font-medium underline">
               Log in to see your balance

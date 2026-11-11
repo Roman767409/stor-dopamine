@@ -1,8 +1,8 @@
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field, field_validator
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, joinedload
 
 from app.auth import create_token, get_current_user, hash_password, verify_password
 from app.database import get_db
@@ -32,10 +32,11 @@ class Credentials(BaseModel):
 
 def user_to_dict(user: User):
     return {
-        "id": user.id,
+        "id": str(user.id),
         "email": user.email,
-        "balance_dp": user.balance_dp,
-        "total_saved": user.total_saved,
+        "role": user.role,
+        "virtual_balance": float(user.virtual_balance),
+        "total_saved_amount": float(user.total_saved_amount),
     }
 
 
@@ -46,14 +47,20 @@ def health():
 
 @app.get("/api/products")
 def list_products(db: Session = Depends(get_db)):
-    products = db.scalars(select(Product)).all()
+    products = db.scalars(
+        select(Product)
+        .options(joinedload(Product.category))
+        .where(Product.is_active.is_(True))
+        .order_by(Product.title)
+    ).all()
     return [
         {
-            "id": p.id,
-            "name": p.name,
+            "id": str(p.id),
+            "title": p.title,
             "description": p.description,
-            "category": p.category,
-            "price_dp": p.price_dp,
+            "category": p.category.name,
+            "category_slug": p.category.slug,
+            "price": float(p.price),
             "image_url": p.image_url,
         }
         for p in products
@@ -62,8 +69,8 @@ def list_products(db: Session = Depends(get_db)):
 
 @app.post("/api/auth/register", status_code=201)
 def register(data: Credentials, db: Session = Depends(get_db)):
-    email = data.email.lower()
-    if db.scalar(select(User).where(User.email == email)):
+    email = data.email.strip().lower()
+    if db.scalar(select(User).where(func.lower(User.email) == email)):
         raise HTTPException(status_code=409, detail="Email already registered")
     user = User(email=email, password_hash=hash_password(data.password))
     db.add(user)
@@ -74,7 +81,8 @@ def register(data: Credentials, db: Session = Depends(get_db)):
 
 @app.post("/api/auth/login")
 def login(data: Credentials, db: Session = Depends(get_db)):
-    user = db.scalar(select(User).where(User.email == data.email.lower()))
+    email = data.email.strip().lower()
+    user = db.scalar(select(User).where(func.lower(User.email) == email))
     if user is None or not verify_password(data.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Wrong email or password")
     return {"token": create_token(user.id), "user": user_to_dict(user)}

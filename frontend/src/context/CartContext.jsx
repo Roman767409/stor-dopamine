@@ -26,7 +26,11 @@ function loadCart(storageKey) {
     const saved = localStorage.getItem(storageKey)
     if (!saved) return []
     const parsed = JSON.parse(saved)
-    return Array.isArray(parsed) ? parsed : []
+    if (!Array.isArray(parsed)) return []
+    // Відкидаємо позиції старого формату (числовий id, price_dp замість price)
+    return parsed.filter(
+      (item) => item && typeof item.id === 'string' && typeof item.price === 'number'
+    )
   } catch {
     return []
   }
@@ -97,7 +101,7 @@ export function CartProvider({ children }) {
   // Поки кошик не підмінено на кошик поточного власника, показуємо порожній
   const items = cart.key === storageKey ? cart.items : []
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0)
-  const totalPrice = items.reduce((sum, item) => sum + item.price_dp * item.quantity, 0)
+  const totalPrice = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
 
   const value = {
     items,
