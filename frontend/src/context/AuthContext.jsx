@@ -2,78 +2,107 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import axios from 'axios'
 
 const API_URL = 'http://127.0.0.1:8000/api/auth'
-const STORAGE_KEY = 'token'
+const ACCESS_KEY = 'access_token'
+const REFRESH_KEY = 'refresh_token'
+const LEGACY_KEY = 'token'
 
 const AuthContext = createContext(null)
 
-function readToken() {
+function readItem(key) {
   try {
-    return localStorage.getItem(STORAGE_KEY)
+    return localStorage.getItem(key)
   } catch {
     return null
   }
 }
 
-function saveToken(token) {
+function saveTokens({ access_token, refresh_token }) {
   try {
-    localStorage.setItem(STORAGE_KEY, token)
+    localStorage.setItem(ACCESS_KEY, access_token)
+    localStorage.setItem(REFRESH_KEY, refresh_token)
   } catch {
     // Сховище недоступне — після перезавантаження доведеться увійти знову
   }
 }
 
-function removeToken() {
+function clearTokens() {
   try {
-    localStorage.removeItem(STORAGE_KEY)
+    localStorage.removeItem(ACCESS_KEY)
+    localStorage.removeItem(REFRESH_KEY)
   } catch {
-    // Нічого не робимо: токена в сховищі однаково немає або воно недоступне
+    // Сховище недоступне — токенів у ньому однаково немає
+  }
+}
+
+// Старий формат зберігав один токен під ключем `token` — прибираємо його
+function removeLegacyToken() {
+  try {
+    localStorage.removeItem(LEGACY_KEY)
+  } catch {
+    // Нічого не робимо
   }
 }
 
 // Перетворює помилку axios на зрозумілий текст
 function getErrorMessage(error) {
-  if (!error.response) {
-    return "Не вдалося зв'язатися із сервером"
-  }
-  const detail = error.response.data?.detail
+  const detail = error?.response?.data?.detail
   if (typeof detail === 'string') {
     return detail
   }
-  if (Array.isArray(detail) && detail[0]?.msg) {
-    return detail[0].msg
+  if (Array.isArray(detail) && typeof detail[0]?.msg === 'string') {
+    return detail[0].msg.replace(/^Value error, /, '')
   }
-  return 'Щось пішло не так, спробуйте ще раз'
+  return 'Something went wrong'
+}
+
+function fetchMe(accessToken) {
+  return axios
+    .get(`${API_URL}/me`, { headers: { Authorization: `Bearer ${accessToken}` } })
+    .then((response) => response.data)
 }
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
-  const [token, setToken] = useState(null)
   // Завантаження потрібне лише тоді, коли є збережений токен, який треба перевірити
-  const [isLoading, setIsLoading] = useState(() => readToken() !== null)
+  const [isLoading, setIsLoading] = useState(() => readItem(ACCESS_KEY) !== null)
 
-  // При завантаженні сторінки пробуємо відновити сесію за збереженим токеном
+  // При завантаженні сторінки пробуємо відновити сесію за збереженими токенами
   useEffect(() => {
     let cancelled = false
-    const savedToken = readToken()
+    removeLegacyToken()
 
-    if (!savedToken) return
+    const accessToken = readItem(ACCESS_KEY)
+    if (!accessToken) return
 
-    axios
-      .get(`${API_URL}/me`, {
-        headers: { Authorization: `Bearer ${savedToken}` },
-      })
-      .then((response) => {
-        if (cancelled) return
-        setToken(savedToken)
-        setUser(response.data)
+    async function restore() {
+      try {
+        return await fetchMe(accessToken)
+      } catch (error) {
+        const refreshToken = readItem(REFRESH_KEY)
+        // Access-токен прострочений — один раз пробуємо оновити пару токенів
+        if (error.response?.status === 401 && refreshToken) {
+          const response = await axios.post(`${API_URL}/refresh`, {
+            refresh_token: refreshToken,
+          })
+          saveTokens(response.data)
+          return await fetchMe(response.data.access_token)
+        }
+        throw error
+      }
+    }
+
+    restore()
+      .then((me) => {
+        if (!cancelled) setUser(me)
       })
       .catch((error) => {
         if (cancelled) return
-        // Сервер відповів помилкою (наприклад, 401) — токен недійсний, видаляємо.
-        // Якщо сервер просто недоступний, токен лишаємо: спробуємо при наступному завантаженні.
+        // Сервер відповів помилкою — токени недійсні, видаляємо.
+        // Якщо сервер просто недоступний, токени лишаємо: спробуємо при наступному завантаженні.
         if (error.response) {
-          removeToken()
+          clearTokens()
         }
+        setUser(null)
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false)
@@ -84,35 +113,41 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  // Спільна логіка для входу і реєстрації
-  async function authenticate(path, email, password) {
+  async function login(email, password) {
     try {
-      const response = await axios.post(`${API_URL}/${path}`, { email, password })
-      const { token: newToken, user: newUser } = response.data
-      saveToken(newToken)
-      setToken(newToken)
-      setUser(newUser)
-      return newUser
+      const response = await axios.post(`${API_URL}/login`, { email, password })
+      saveTokens(response.data)
+      const me = await fetchMe(response.data.access_token)
+      setUser(me)
+      return me
     } catch (error) {
       throw new Error(getErrorMessage(error), { cause: error })
     }
   }
 
-  function register(email, password) {
-    return authenticate('register', email, password)
+  async function register(email, password) {
+    try {
+      await axios.post(`${API_URL}/register`, { email, password })
+    } catch (error) {
+      throw new Error(getErrorMessage(error), { cause: error })
+    }
+    return login(email, password)
   }
 
-  function login(email, password) {
-    return authenticate('login', email, password)
-  }
-
-  function logout() {
-    removeToken()
-    setToken(null)
+  async function logout() {
+    const refreshToken = readItem(REFRESH_KEY)
+    clearTokens()
     setUser(null)
+    if (refreshToken) {
+      try {
+        await axios.post(`${API_URL}/logout`, { refresh_token: refreshToken })
+      } catch {
+        // Не вдалося відкликати токен на сервері — локально ми однаково вийшли
+      }
+    }
   }
 
-  const value = { user, token, isLoading, register, login, logout }
+  const value = { user, isLoading, register, login, logout }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
