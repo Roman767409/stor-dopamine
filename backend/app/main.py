@@ -15,6 +15,7 @@ from app.auth import (
     rotate_refresh_token,
     verify_password,
 )
+from app.core.errors import register_error_handlers
 from app.database import get_db
 from app.models import Product, User
 
@@ -26,6 +27,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+register_error_handlers(app)
 
 
 class RegisterRequest(BaseModel):

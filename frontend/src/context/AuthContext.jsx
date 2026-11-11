@@ -45,12 +45,12 @@ function removeLegacyToken() {
 
 // Перетворює помилку axios на зрозумілий текст
 function getErrorMessage(error) {
-  const detail = error?.response?.data?.detail
-  if (typeof detail === 'string') {
-    return detail
+  const data = error?.response?.data?.error
+  if (data?.code === 'VALIDATION_ERROR' && data.details?.[0]?.message) {
+    return data.details[0].message
   }
-  if (Array.isArray(detail) && typeof detail[0]?.msg === 'string') {
-    return detail[0].msg.replace(/^Value error, /, '')
+  if (data?.message) {
+    return data.message
   }
   return 'Something went wrong'
 }
