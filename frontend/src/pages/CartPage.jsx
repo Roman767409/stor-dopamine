@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useCart } from '../context/CartContext'
 
@@ -67,6 +67,7 @@ function CartItem({ item }) {
 function CartPage() {
   const { items, totalItems, totalPrice } = useCart()
   const { user, isLoading } = useAuth()
+  const navigate = useNavigate()
 
   // Поки перевіряється сесія, ще невідомо, гість це чи користувач
   if (isLoading) {
@@ -147,6 +148,7 @@ function CartPage() {
         <button
           type="button"
           disabled={checkoutDisabled}
+          onClick={() => navigate('/checkout')}
           className="bg-gray-200 hover:bg-gray-300 rounded-full px-6 py-3 font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-200"
         >
           Checkout
