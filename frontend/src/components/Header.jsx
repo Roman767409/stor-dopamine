@@ -14,6 +14,14 @@ const links = [
   { href: '/about', label: 'About us' },
 ]
 
+// Посилання в меню профілю
+const profileLinks = [
+  { href: '/orders', label: 'My orders' },
+  { href: '/dashboard', label: 'Savings dashboard' },
+  { href: '/tracking', label: 'Track parcel' },
+  { href: '/profile', label: 'Profile' },
+]
+
 function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isProfileOpen, setIsProfileOpen] = useState(false)
@@ -97,6 +105,27 @@ function Header() {
                     <p className="text-sm text-gray-600 truncate" title={user.email}>
                       {user.email}
                     </p>
+                    <nav aria-label="Account" className="-mx-2 flex flex-col">
+                      {profileLinks.map((link) => (
+                        <Link
+                          key={link.href}
+                          to={link.href}
+                          onClick={() => setIsProfileOpen(false)}
+                          className="rounded-lg px-2 py-2 text-sm hover:bg-gray-100"
+                        >
+                          {link.label}
+                        </Link>
+                      ))}
+                      {user.role === 'admin' && (
+                        <Link
+                          to="/admin"
+                          onClick={() => setIsProfileOpen(false)}
+                          className="rounded-lg px-2 py-2 text-sm font-medium hover:bg-gray-100"
+                        >
+                          Admin panel
+                        </Link>
+                      )}
+                    </nav>
                     <button
                       type="button"
                       onClick={handleLogout}
