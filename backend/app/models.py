@@ -14,10 +14,12 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
+    desc,
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -124,4 +126,78 @@ class RefreshToken(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     revoked_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+
+
+# Замовлення користувача; idempotency_key захищає від повторного оформлення
+class Order(Base):
+    __tablename__ = "orders"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    # Формат DS-XXXXXXXXXX
+    tracking_number: Mapped[str] = mapped_column(
+        String(16), nullable=False, unique=True
+    )
+    idempotency_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    total_price: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="CREATED"
+    )
+    shipping_address: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    items: Mapped[list[OrderItem]] = relationship(
+        back_populates="order", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        CheckConstraint("total_price > 0", name="ck_orders_total_positive"),
+        CheckConstraint(
+            "status IN ('CREATED', 'PROCESSING', 'IN_TRANSIT', 'DELIVERED')",
+            name="ck_orders_status",
+        ),
+        UniqueConstraint("user_id", "idempotency_key", name="uq_orders_user_idem"),
+        Index("ix_orders_user_created", user_id, desc(created_at)),
+    )
+
+
+# Позиція замовлення; ціна фіксується на момент покупки
+class OrderItem(Base):
+    __tablename__ = "order_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    order_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("orders.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("products.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    price_at_purchase: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+
+    order: Mapped[Order] = relationship(back_populates="items")
+    product: Mapped[Product] = relationship()
+
+    __table_args__ = (
+        CheckConstraint("quantity BETWEEN 1 AND 99", name="ck_order_items_quantity"),
+        CheckConstraint(
+            "price_at_purchase > 0", name="ck_order_items_price_positive"
+        ),
+        UniqueConstraint(
+            "order_id", "product_id", name="uq_order_items_order_product"
+        ),
+        Index("ix_order_items_order", "order_id"),
     )
