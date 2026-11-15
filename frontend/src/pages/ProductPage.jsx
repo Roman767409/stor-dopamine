@@ -1,11 +1,12 @@
 // Product screen: big image placeholder, details, quantity picker and "Add to cart"
 import { useEffect, useState } from 'react'
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import axios from 'axios'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useCart } from '../context/CartContext'
 import EmptyState from '../components/EmptyState'
+import ErrorState from '../components/ErrorState'
 import PageContainer from '../components/PageContainer'
-import { mockProducts } from '../mocks/mockData'
 import { formatDp } from '../utils/format'
 import { btnPrimary, focusRing } from '../utils/styles'
 
@@ -18,14 +19,41 @@ function clampQuantity(value) {
   return Math.min(MAX_QUANTITY, Math.max(MIN_QUANTITY, number))
 }
 
+// Gray pulsing placeholder that repeats the product layout
+function ProductSkeleton() {
+  return (
+    <div role="status">
+      <span className="sr-only">Loading…</span>
+      <div
+        className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 animate-pulse"
+        aria-hidden="true"
+      >
+        <div className="bg-gray-200 rounded-xl aspect-square w-full" />
+        <div className="flex flex-col gap-4">
+          <div className="bg-gray-200 rounded h-4 w-1/4" />
+          <div className="bg-gray-200 rounded h-9 w-3/4" />
+          <div className="bg-gray-200 rounded h-8 w-1/3" />
+          <div className="bg-gray-200 rounded h-20 w-full" />
+          <div className="bg-gray-200 rounded-full h-10 w-40 mt-2" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ProductPage() {
   const { id } = useParams()
-  const location = useLocation()
   const navigate = useNavigate()
-  const { user, isLoading } = useAuth()
+  const { user, isLoading: isAuthLoading } = useAuth()
   const { addToCart } = useCart()
   const [quantity, setQuantity] = useState('1')
   const [isAdded, setIsAdded] = useState(false)
+  const [attempt, setAttempt] = useState(0)
+  // Last server answer together with the key of the request it belongs to
+  const [result, setResult] = useState({ key: null, product: null, notFound: false, error: null })
+
+  const requestKey = `${id}:${attempt}`
+  const isLoading = result.key !== requestKey
 
   useEffect(() => {
     if (!isAdded) return
@@ -33,12 +61,45 @@ function ProductPage() {
     return () => clearTimeout(timer)
   }, [isAdded])
 
-  // From the Shop card the product comes in navigation state; otherwise look it up in the mocks
-  const stateProduct = location.state?.product
-  const product =
-    stateProduct?.id === id ? stateProduct : mockProducts.find((item) => item.id === id)
+  useEffect(() => {
+    // The flag drops the answer if the user has already opened another product
+    let cancelled = false
 
-  if (!product) {
+    axios
+      .get(`http://127.0.0.1:8000/api/products/${id}`)
+      .then((response) => {
+        if (cancelled) return
+        setResult({ key: requestKey, product: response.data, notFound: false, error: null })
+      })
+      .catch((error) => {
+        if (cancelled) return
+        // 404: no such product; 422: the id in the URL is not a valid UUID
+        const status = error.response?.status
+        const notFound = status === 404 || status === 422
+        setResult({
+          key: requestKey,
+          product: null,
+          notFound,
+          error: notFound
+            ? null
+            : error.response?.data?.error?.message || 'Could not load product',
+        })
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [id, requestKey])
+
+  if (isLoading) {
+    return (
+      <PageContainer>
+        <ProductSkeleton />
+      </PageContainer>
+    )
+  }
+
+  if (result.notFound) {
     return (
       <PageContainer>
         <EmptyState
@@ -51,6 +112,15 @@ function ProductPage() {
     )
   }
 
+  if (result.error) {
+    return (
+      <PageContainer>
+        <ErrorState message={result.error} onRetry={() => setAttempt((value) => value + 1)} />
+      </PageContainer>
+    )
+  }
+
+  const product = result.product
   const count = clampQuantity(quantity)
 
   function handleQuantityChange(event) {
@@ -128,7 +198,7 @@ function ProductPage() {
           <button
             type="button"
             onClick={handleAdd}
-            disabled={isLoading}
+            disabled={isAuthLoading}
             className={`mt-2 w-full sm:w-auto sm:self-start ${btnPrimary}`}
           >
             Add to cart

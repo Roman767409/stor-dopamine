@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import axios from 'axios'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
@@ -14,14 +14,24 @@ import { btnSmall, focusRing, inputClass, labelClass } from '../utils/styles'
 const PAGE_SIZE = 12
 // Після цього часу очікування показуємо банер «сервер прокидається»
 const SLOW_REQUEST_MS = 3000
+// Затримка перед відправкою пошукового запиту
+const SEARCH_DEBOUNCE_MS = 400
 
 const SORT_OPTIONS = [
-  { value: 'name', label: 'Name A–Z' },
-  { value: 'price-asc', label: 'Price low→high' },
-  { value: 'price-desc', label: 'Price high→low' },
+  { value: 'title_asc', label: 'Name A–Z' },
+  { value: 'price_asc', label: 'Price low→high' },
+  { value: 'price_desc', label: 'Price high→low' },
 ]
 
-const EMPTY_FILTERS = { search: '', category: '', minPrice: '', maxPrice: '', sort: 'name' }
+// TODO: replace with GET /api/categories
+const CATEGORIES = [
+  { slug: 'electronics', name: 'Електроніка' },
+  { slug: 'accessories', name: 'Аксесуари' },
+  { slug: 'clothing', name: 'Одяг' },
+  { slug: 'home', name: 'Дім' },
+]
+
+const EMPTY_FILTERS = { search: '', category: '', minPrice: '', maxPrice: '', sort: 'title_asc' }
 
 function ProductCard({ product }) {
   const { addToCart } = useCart()
@@ -48,10 +58,8 @@ function ProductCard({ product }) {
 
   return (
     <div className="flex flex-col gap-2">
-      {/* Картка веде на сторінку товару; товар передаємо в state, щоб не шукати його вдруге */}
       <Link
         to={`/product/${product.id}`}
-        state={{ product }}
         className={`group flex flex-col gap-2 rounded-xl ${focusRing}`}
       >
         <div className="bg-gray-200 rounded-xl aspect-square w-full" />
@@ -71,86 +79,179 @@ function ProductCard({ product }) {
   )
 }
 
-// Фільтрує та сортує товари на клієнті
-function applyFilters(products, filters) {
-  const search = filters.search.trim().toLowerCase()
-  const min = filters.minPrice === '' ? null : Number(filters.minPrice)
-  const max = filters.maxPrice === '' ? null : Number(filters.maxPrice)
-
-  const result = products.filter((product) => {
-    if (search && !product.title.toLowerCase().includes(search)) return false
-    if (filters.category && product.category !== filters.category) return false
-    if (min !== null && product.price < min) return false
-    if (max !== null && product.price > max) return false
-    return true
-  })
-
-  return result.sort((a, b) => {
-    if (filters.sort === 'price-asc') return a.price - b.price
-    if (filters.sort === 'price-desc') return b.price - a.price
-    return a.title.localeCompare(b.title)
-  })
+// Збирає параметри запиту, пропускаючи порожні значення
+function buildParams(filters, q, page) {
+  const params = { page, page_size: PAGE_SIZE, sort: filters.sort }
+  if (q) params.q = q
+  if (filters.category) params.category = filters.category
+  if (filters.minPrice !== '') params.min_price = filters.minPrice
+  if (filters.maxPrice !== '') params.max_price = filters.maxPrice
+  return params
 }
 
 function ShopPage() {
-  const [products, setProducts] = useState([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState(false)
-  const [isSlow, setIsSlow] = useState(false)
-  const [attempt, setAttempt] = useState(0)
   const [filters, setFilters] = useState(EMPTY_FILTERS)
+  // Пошуковий рядок, який реально пішов у запит (оновлюється із затримкою)
+  const [query, setQuery] = useState('')
   const [page, setPage] = useState(1)
+  const [attempt, setAttempt] = useState(0)
+  // Остання відповідь сервера разом із ключем запиту, якому вона належить
+  const [result, setResult] = useState({ key: null, items: [], total: 0, error: null })
+  const [slowKey, setSlowKey] = useState(null)
 
-  useEffect(() => {
-    axios
-      .get('http://127.0.0.1:8000/api/products')
-      .then((response) => {
-        setProducts(response.data)
-      })
-      .catch(() => {
-        setError(true)
-      })
-      .finally(() => {
-        setIsLoading(false)
-      })
-  }, [attempt])
+  const params = buildParams(filters, query, page)
+  const requestKey = JSON.stringify([params, attempt])
+  // Поки відповідь не збігається з поточним запитом, вважаємо, що йде завантаження
+  const isLoading = result.key !== requestKey
+  const isSlow = isLoading && slowKey === requestKey
 
-  // Якщо запит триває довше 3 с, вмикаємо банер про повільний сервер
+  // Пошук відправляємо не на кожну літеру, а після паузи в наборі
   useEffect(() => {
-    if (!isLoading) return
-    const timer = setTimeout(() => setIsSlow(true), SLOW_REQUEST_MS)
+    const timer = setTimeout(() => {
+      setQuery(filters.search.trim())
+      setPage(1)
+    }, SEARCH_DEBOUNCE_MS)
     return () => clearTimeout(timer)
-  }, [isLoading])
+  }, [filters.search])
 
-  const categories = useMemo(
-    () => [...new Set(products.map((product) => product.category))].sort(),
-    [products]
-  )
-  const filtered = useMemo(() => applyFilters(products, filters), [products, filters])
+  useEffect(() => {
+    // Прапорець відкидає відповідь, якщо фільтри змінилися, поки йшов запит
+    let cancelled = false
+    const [requestParams] = JSON.parse(requestKey)
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const currentPage = Math.min(page, totalPages)
-  const visible = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+    axios
+      .get('http://127.0.0.1:8000/api/products', { params: requestParams })
+      .then((response) => {
+        if (cancelled) return
+        const { items, total } = response.data
+        setResult({ key: requestKey, items, total, error: null })
+        // Якщо товарів стало менше, повертаємося на останню наявну сторінку
+        const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE))
+        if (requestParams.page > lastPage) setPage(lastPage)
+      })
+      .catch((error) => {
+        if (cancelled) return
+        setResult({
+          key: requestKey,
+          items: [],
+          total: 0,
+          error: error.response?.data?.error?.message || 'Could not load products',
+        })
+      })
+
+    // Якщо запит триває довше 3 с, вмикаємо банер про повільний сервер
+    const slowTimer = setTimeout(() => setSlowKey(requestKey), SLOW_REQUEST_MS)
+
+    return () => {
+      cancelled = true
+      clearTimeout(slowTimer)
+    }
+  }, [requestKey])
+
+  const { items: products, total, error } = result
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   function handleRetry() {
-    setError(false)
-    setIsSlow(false)
-    setIsLoading(true)
     setAttempt((value) => value + 1)
   }
 
   function updateFilter(name, value) {
     setFilters((prev) => ({ ...prev, [name]: value }))
-    setPage(1)
+    // Для пошуку сторінку скидає debounce — разом із відправкою нового запиту
+    if (name !== 'search') setPage(1)
   }
 
   function resetFilters() {
     setFilters(EMPTY_FILTERS)
+    setQuery('')
     setPage(1)
   }
 
   return (
     <PageContainer title="Shop">
+      {/* Рядок керування: пошук, категорія, ціна, сортування */}
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-4">
+        <div className="col-span-2 flex flex-col gap-1">
+          <label htmlFor="shop-search" className={labelClass}>
+            Search
+          </label>
+          <input
+            id="shop-search"
+            type="search"
+            placeholder="Product name"
+            maxLength={100}
+            value={filters.search}
+            onChange={(event) => updateFilter('search', event.target.value)}
+            className={inputClass}
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="shop-category" className={labelClass}>
+            Category
+          </label>
+          <select
+            id="shop-category"
+            value={filters.category}
+            onChange={(event) => updateFilter('category', event.target.value)}
+            className={inputClass}
+          >
+            <option value="">All</option>
+            {CATEGORIES.map((category) => (
+              <option key={category.slug} value={category.slug}>
+                {category.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="shop-min" className={labelClass}>
+            Min price, DP
+          </label>
+          <input
+            id="shop-min"
+            type="number"
+            min="0"
+            inputMode="numeric"
+            placeholder="0"
+            value={filters.minPrice}
+            onChange={(event) => updateFilter('minPrice', event.target.value)}
+            className={inputClass}
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="shop-max" className={labelClass}>
+            Max price, DP
+          </label>
+          <input
+            id="shop-max"
+            type="number"
+            min="0"
+            inputMode="numeric"
+            placeholder="Any"
+            value={filters.maxPrice}
+            onChange={(event) => updateFilter('maxPrice', event.target.value)}
+            className={inputClass}
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="shop-sort" className={labelClass}>
+            Sort by
+          </label>
+          <select
+            id="shop-sort"
+            value={filters.sort}
+            onChange={(event) => updateFilter('sort', event.target.value)}
+            className={inputClass}
+          >
+            {SORT_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       {isLoading && (
         <>
           {isSlow && <ServerWakingBanner />}
@@ -158,99 +259,15 @@ function ShopPage() {
         </>
       )}
 
-      {!isLoading && error && (
-        <ErrorState message="Could not load products" onRetry={handleRetry} />
-      )}
+      {!isLoading && error && <ErrorState message={error} onRetry={handleRetry} />}
 
       {!isLoading && !error && (
         <>
-          {/* Рядок керування: пошук, категорія, ціна, сортування */}
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-4">
-            <div className="col-span-2 flex flex-col gap-1">
-              <label htmlFor="shop-search" className={labelClass}>
-                Search
-              </label>
-              <input
-                id="shop-search"
-                type="search"
-                placeholder="Product name"
-                value={filters.search}
-                onChange={(event) => updateFilter('search', event.target.value)}
-                className={inputClass}
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label htmlFor="shop-category" className={labelClass}>
-                Category
-              </label>
-              <select
-                id="shop-category"
-                value={filters.category}
-                onChange={(event) => updateFilter('category', event.target.value)}
-                className={inputClass}
-              >
-                <option value="">All</option>
-                {categories.map((category) => (
-                  <option key={category} value={category}>
-                    {category}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <label htmlFor="shop-min" className={labelClass}>
-                Min price, DP
-              </label>
-              <input
-                id="shop-min"
-                type="number"
-                min="0"
-                inputMode="numeric"
-                placeholder="0"
-                value={filters.minPrice}
-                onChange={(event) => updateFilter('minPrice', event.target.value)}
-                className={inputClass}
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label htmlFor="shop-max" className={labelClass}>
-                Max price, DP
-              </label>
-              <input
-                id="shop-max"
-                type="number"
-                min="0"
-                inputMode="numeric"
-                placeholder="Any"
-                value={filters.maxPrice}
-                onChange={(event) => updateFilter('maxPrice', event.target.value)}
-                className={inputClass}
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label htmlFor="shop-sort" className={labelClass}>
-                Sort by
-              </label>
-              <select
-                id="shop-sort"
-                value={filters.sort}
-                onChange={(event) => updateFilter('sort', event.target.value)}
-                className={inputClass}
-              >
-                {SORT_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
           <p className="text-sm text-gray-600 mb-8" aria-live="polite">
-            {filtered.length} {filtered.length === 1 ? 'product' : 'products'}
+            {total} {total === 1 ? 'product' : 'products'}
           </p>
 
-          {filtered.length === 0 ? (
+          {products.length === 0 ? (
             <EmptyState
               title="Nothing found"
               text="Try another name, category or price range."
@@ -260,7 +277,7 @@ function ShopPage() {
           ) : (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {visible.map((product) => (
+                {products.map((product) => (
                   <ProductCard key={product.id} product={product} />
                 ))}
               </div>
@@ -271,19 +288,19 @@ function ShopPage() {
               >
                 <button
                   type="button"
-                  onClick={() => setPage(currentPage - 1)}
-                  disabled={currentPage === 1}
+                  onClick={() => setPage(page - 1)}
+                  disabled={page <= 1}
                   className={btnSmall}
                 >
                   Previous
                 </button>
                 <span className="text-sm font-medium">
-                  Page {currentPage} of {totalPages}
+                  Page {page} of {totalPages}
                 </span>
                 <button
                   type="button"
-                  onClick={() => setPage(currentPage + 1)}
-                  disabled={currentPage === totalPages}
+                  onClick={() => setPage(page + 1)}
+                  disabled={page >= totalPages}
                   className={btnSmall}
                 >
                   Next
