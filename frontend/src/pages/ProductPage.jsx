@@ -1,6 +1,6 @@
 // Product screen: big image placeholder, details, quantity picker and "Add to cart"
 import { useEffect, useState } from 'react'
-import axios from 'axios'
+import api from '../api'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useCart } from '../context/CartContext'
@@ -65,8 +65,8 @@ function ProductPage() {
     // The flag drops the answer if the user has already opened another product
     let cancelled = false
 
-    axios
-      .get(`http://127.0.0.1:8000/api/products/${id}`)
+    api
+      .get(`/api/products/${id}`)
       .then((response) => {
         if (cancelled) return
         setResult({ key: requestKey, product: response.data, notFound: false, error: null })

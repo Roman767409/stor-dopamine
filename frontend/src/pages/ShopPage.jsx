@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import axios from 'axios'
+import api from '../api'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useCart } from '../context/CartContext'
@@ -119,8 +119,8 @@ function ShopPage() {
     let cancelled = false
     const [requestParams] = JSON.parse(requestKey)
 
-    axios
-      .get('http://127.0.0.1:8000/api/products', { params: requestParams })
+    api
+      .get('/api/products', { params: requestParams })
       .then((response) => {
         if (cancelled) return
         const { items, total } = response.data

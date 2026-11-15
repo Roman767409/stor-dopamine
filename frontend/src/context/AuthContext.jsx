@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import axios from 'axios'
+import api from '../api'
 
-const API_URL = 'http://127.0.0.1:8000/api/auth'
 const ACCESS_KEY = 'access_token'
 const REFRESH_KEY = 'refresh_token'
 const LEGACY_KEY = 'token'
@@ -55,10 +54,11 @@ function getErrorMessage(error) {
   return 'Something went wrong'
 }
 
+// Токен зі сховища додає інтерцептор; явний токен потрібен одразу після входу,
+// якщо сховище недоступне
 function fetchMe(accessToken) {
-  return axios
-    .get(`${API_URL}/me`, { headers: { Authorization: `Bearer ${accessToken}` } })
-    .then((response) => response.data)
+  const config = accessToken ? { headers: { Authorization: `Bearer ${accessToken}` } } : undefined
+  return api.get('/api/auth/me', config).then((response) => response.data)
 }
 
 export function AuthProvider({ children }) {
@@ -71,27 +71,10 @@ export function AuthProvider({ children }) {
     let cancelled = false
     removeLegacyToken()
 
-    const accessToken = readItem(ACCESS_KEY)
-    if (!accessToken) return
+    if (!readItem(ACCESS_KEY)) return
 
-    async function restore() {
-      try {
-        return await fetchMe(accessToken)
-      } catch (error) {
-        const refreshToken = readItem(REFRESH_KEY)
-        // Access-токен прострочений — один раз пробуємо оновити пару токенів
-        if (error.response?.status === 401 && refreshToken) {
-          const response = await axios.post(`${API_URL}/refresh`, {
-            refresh_token: refreshToken,
-          })
-          saveTokens(response.data)
-          return await fetchMe(response.data.access_token)
-        }
-        throw error
-      }
-    }
-
-    restore()
+    // Якщо access-токен прострочений, пару токенів оновить інтерцептор у api.js
+    fetchMe()
       .then((me) => {
         if (!cancelled) setUser(me)
       })
@@ -113,9 +96,18 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
+  // Інтерцептор не зміг оновити токени — сесія закінчилась, скидаємо користувача
+  useEffect(() => {
+    function handleForcedLogout() {
+      setUser(null)
+    }
+    window.addEventListener('auth:logout', handleForcedLogout)
+    return () => window.removeEventListener('auth:logout', handleForcedLogout)
+  }, [])
+
   async function login(email, password) {
     try {
-      const response = await axios.post(`${API_URL}/login`, { email, password })
+      const response = await api.post('/api/auth/login', { email, password })
       saveTokens(response.data)
       const me = await fetchMe(response.data.access_token)
       setUser(me)
@@ -127,7 +119,7 @@ export function AuthProvider({ children }) {
 
   async function register(email, password) {
     try {
-      await axios.post(`${API_URL}/register`, { email, password })
+      await api.post('/api/auth/register', { email, password })
     } catch (error) {
       throw new Error(getErrorMessage(error), { cause: error })
     }
@@ -140,7 +132,7 @@ export function AuthProvider({ children }) {
     setUser(null)
     if (refreshToken) {
       try {
-        await axios.post(`${API_URL}/logout`, { refresh_token: refreshToken })
+        await api.post('/api/auth/logout', { refresh_token: refreshToken })
       } catch {
         // Не вдалося відкликати токен на сервері — локально ми однаково вийшли
       }
