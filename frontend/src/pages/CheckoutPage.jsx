@@ -1,15 +1,13 @@
-// Checkout screen: shipping form, test card form and order summary (payment is simulated)
+// Checkout screen: shipping form, test card form (client-side only) and order summary; places the order via POST /api/orders
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import api from '../api'
 import { useAuth } from '../context/AuthContext'
 import { useCart } from '../context/CartContext'
 import FormField from '../components/FormField'
 import PageContainer from '../components/PageContainer'
 import { formatDp } from '../utils/format'
 import { btnPrimary, cardClass } from '../utils/styles'
-
-const PROCESSING_MS = 1500
-const TRACKING_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
 
 const EMPTY_FORM = {
   fullName: '',
@@ -98,27 +96,44 @@ function validate(form, now) {
   return errors
 }
 
-function generateTrackingNumber() {
-  let code = ''
-  for (let i = 0; i < 10; i += 1) {
-    code += TRACKING_CHARS[Math.floor(Math.random() * TRACKING_CHARS.length)]
+// Stable fingerprint of the cart contents (product ids + quantities only)
+function cartSignature(items) {
+  return JSON.stringify(
+    items.map((item) => [item.id, item.quantity]).sort((a, b) => (a[0] < b[0] ? -1 : 1))
+  )
+}
+
+// Maps an API error to a message shown above the pay button
+function getOrderErrorMessage(error) {
+  const data = error?.response?.data?.error
+  if (data?.code === 'INSUFFICIENT_FUNDS') return 'Недостатньо Dopamine Points'
+  if (data?.code === 'PRODUCT_UNAVAILABLE') {
+    return 'Один із товарів більше недоступний. Оновіть кошик'
   }
-  return `DS-${code}`
+  return data?.message || 'Щось пішло не так, спробуйте ще раз'
 }
 
 function CheckoutPage() {
-  const { user } = useAuth()
+  const { user, updateBalance } = useAuth()
   const { items, totalPrice, clearCart } = useCart()
   const navigate = useNavigate()
   const [form, setForm] = useState(EMPTY_FORM)
   const [errors, setErrors] = useState({})
   const [wasSubmitted, setWasSubmitted] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
-  const timerRef = useRef(null)
+  const [submitError, setSubmitError] = useState('')
+  // Idempotency key is reused for retries of the same cart and replaced when the cart changes
+  const idempotencyKeyRef = useRef(null)
+  const keySignatureRef = useRef(null)
+  // Synchronous guard against double submit (state updates are async)
+  const inFlightRef = useRef(false)
+  const isMountedRef = useRef(true)
 
-  // Stop the fake payment if the user leaves the page
   useEffect(() => {
-    return () => clearTimeout(timerRef.current)
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+    }
   }, [])
 
   const balance = Number(user?.virtual_balance ?? 0)
@@ -133,9 +148,19 @@ function CheckoutPage() {
     if (wasSubmitted) setErrors(validate(next, new Date()))
   }
 
-  function handleSubmit(event) {
+  // Returns the key for the current cart: same cart -> same key, changed cart -> new key
+  function getIdempotencyKey() {
+    const signature = cartSignature(items)
+    if (!idempotencyKeyRef.current || keySignatureRef.current !== signature) {
+      idempotencyKeyRef.current = crypto.randomUUID()
+      keySignatureRef.current = signature
+    }
+    return idempotencyKeyRef.current
+  }
+
+  async function handleSubmit(event) {
     event.preventDefault()
-    if (!canPay) return
+    if (!canPay || inFlightRef.current) return
 
     setWasSubmitted(true)
     const nextErrors = validate(form, new Date())
@@ -146,32 +171,60 @@ function CheckoutPage() {
       return
     }
 
-    const order = {
-      id: 'new',
-      tracking_number: generateTrackingNumber(),
-      total_price: totalPrice,
-      status: 'CREATED',
-      created_at: new Date().toISOString(),
-      shipping_address: {
-        full_name: form.fullName.trim(),
-        line1: form.address.trim(),
-        city: form.city.trim(),
-        postal_code: form.postalCode.trim(),
-        country: form.country.trim(),
-      },
-      items: items.map((item) => ({
-        title: item.title,
-        quantity: item.quantity,
-        price_at_purchase: item.price,
-      })),
+    const shippingAddress = {
+      full_name: form.fullName.trim(),
+      line1: form.address.trim(),
+      city: form.city.trim(),
+      postal_code: form.postalCode.trim(),
+      country: form.country.trim(),
     }
-    const newBalance = balance - totalPrice
+    // Only ids and quantities: the server computes prices itself. Card data is never sent.
+    const payload = {
+      items: items.map((item) => ({ product_id: item.id, quantity: item.quantity })),
+      shipping_address: shippingAddress,
+    }
+    const idempotencyKey = getIdempotencyKey()
 
+    inFlightRef.current = true
     setIsProcessing(true)
-    timerRef.current = setTimeout(() => {
+    setSubmitError('')
+    try {
+      const { data } = await api.post('/api/orders', payload, {
+        headers: { 'Idempotency-Key': idempotencyKey },
+      })
+
+      // Order shape stays compatible with OrderSuccessPage and TrackingPage
+      const order = {
+        id: data.order_id,
+        tracking_number: data.tracking_number,
+        total_price: data.total_price,
+        status: data.status,
+        created_at: data.created_at,
+        shipping_address: shippingAddress,
+        items: items.map((item) => ({
+          title: item.title,
+          quantity: item.quantity,
+          price_at_purchase: item.price,
+        })),
+      }
+
+      // Next order gets a fresh key
+      idempotencyKeyRef.current = null
+      keySignatureRef.current = null
+      updateBalance(data.new_balance)
       clearCart()
-      navigate('/order-success', { state: { order, newBalance } })
-    }, PROCESSING_MS)
+      if (isMountedRef.current) {
+        navigate('/order-success', { state: { order, newBalance: data.new_balance } })
+      }
+    } catch (error) {
+      // Cart is kept; the same key will be reused if the cart stays the same
+      if (isMountedRef.current) {
+        setSubmitError(getOrderErrorMessage(error))
+        setIsProcessing(false)
+      }
+    } finally {
+      inFlightRef.current = false
+    }
   }
 
   function fieldProps(name) {
@@ -302,6 +355,12 @@ function CheckoutPage() {
           </div>
 
           {notEnoughDp && <p className="text-red-600 font-medium">Not enough DP</p>}
+
+          {submitError && (
+            <p role="alert" className="text-red-600 font-medium">
+              {submitError}
+            </p>
+          )}
 
           <button
             type="submit"

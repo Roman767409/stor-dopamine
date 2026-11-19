@@ -139,7 +139,12 @@ export function AuthProvider({ children }) {
     }
   }
 
-  const value = { user, isLoading, register, login, logout }
+  // Sets the balance returned by the server (e.g. after checkout) so the Header updates at once
+  function updateBalance(newBalance) {
+    setUser((prev) => (prev ? { ...prev, virtual_balance: newBalance } : prev))
+  }
+
+  const value = { user, isLoading, register, login, logout, updateBalance }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
