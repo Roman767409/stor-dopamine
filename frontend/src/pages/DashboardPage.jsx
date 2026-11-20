@@ -1,30 +1,119 @@
-// Savings dashboard: key metrics, 30-day chart, categories, milestones and week comparison (mock data)
+// Savings dashboard: key metrics, 30-day chart, categories, milestones and week comparison
+// from GET /api/analytics/savings
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import api from '../api'
+import EmptyState from '../components/EmptyState'
+import ErrorState from '../components/ErrorState'
+import LoadingSkeleton from '../components/LoadingSkeleton'
 import PageContainer from '../components/PageContainer'
 import SavingsChart from '../components/SavingsChart'
-import { mockSavings } from '../mocks/mockData'
 import { formatDp } from '../utils/format'
 import { cardClass } from '../utils/styles'
 
 const MILESTONES = [1000, 10000, 50000]
+const DAYS = 30
+
+// Any missing or non-numeric value becomes 0, so the page never shows NaN
+function toNumber(value) {
+  const number = Number(value)
+  return Number.isFinite(number) ? number : 0
+}
 
 function DashboardPage() {
-  const savings = mockSavings
-  const total = savings.total_saved_amount
+  const navigate = useNavigate()
+  const [attempt, setAttempt] = useState(0)
+  // Last server answer together with the request key it belongs to
+  const [result, setResult] = useState({ key: null, savings: null, error: null })
+
+  const requestKey = JSON.stringify([DAYS, attempt])
+  const isLoading = result.key !== requestKey
+
+  useEffect(() => {
+    // Ignore and abort the request if a retry starts or the page is left
+    const controller = new AbortController()
+    let cancelled = false
+    const [days] = JSON.parse(requestKey)
+
+    api
+      .get('/api/analytics/savings', { params: { days }, signal: controller.signal })
+      .then((response) => {
+        if (cancelled) return
+        setResult({ key: requestKey, savings: response.data, error: null })
+      })
+      .catch((error) => {
+        if (cancelled) return
+        setResult({
+          key: requestKey,
+          savings: null,
+          error: error.response?.data?.error?.message || 'Could not load your savings',
+        })
+      })
+
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [requestKey])
+
+  if (isLoading) {
+    return (
+      <PageContainer title="Savings dashboard">
+        <LoadingSkeleton variant="list" count={4} />
+      </PageContainer>
+    )
+  }
+
+  if (result.error) {
+    return (
+      <PageContainer title="Savings dashboard">
+        <ErrorState message={result.error} onRetry={() => setAttempt((count) => count + 1)} />
+      </PageContainer>
+    )
+  }
+
+  const savings = result.savings
+
+  // No orders yet: nothing to chart, show a friendly hint instead of empty widgets
+  if (toNumber(savings.orders_count) === 0) {
+    return (
+      <PageContainer title="Savings dashboard">
+        <EmptyState
+          title="No savings yet"
+          text="Place your first order with virtual DP and see how much real money you didn't spend."
+          actionLabel="Go to shop"
+          onAction={() => navigate('/shop')}
+        />
+      </PageContainer>
+    )
+  }
+
+  const total = toNumber(savings.total_saved)
+  const daily = (savings.by_day ?? []).map((day) => ({
+    date: day.date,
+    amount: toNumber(day.amount),
+  }))
+  const categories = (savings.by_category ?? []).map((item) => ({
+    slug: item.slug,
+    name: item.category,
+    amount: toNumber(item.amount),
+  }))
 
   const metrics = [
     { label: 'Saved money', value: `${formatDp(total)} DP` },
-    { label: 'Orders', value: String(savings.transactions_count) },
-    { label: 'Average order', value: `${formatDp(savings.average_order)} DP` },
+    { label: 'Orders', value: String(toNumber(savings.orders_count)) },
+    { label: 'Average order', value: `${formatDp(savings.average_order_value)} DP` },
     { label: 'Largest order', value: `${formatDp(savings.largest_order)} DP` },
   ]
 
-  const categoryTotal = savings.by_category.reduce((sum, item) => sum + item.amount, 0)
+  const categoryTotal = categories.reduce((sum, item) => sum + item.amount, 0)
 
   const goal = MILESTONES[MILESTONES.length - 1]
   const progress = Math.min(total / goal, 1) * 100
 
-  const lastWeek = savings.last_week_total
-  const previousWeek = savings.previous_week_total
+  const lastWeek = toNumber(savings.last_week_total)
+  const previousWeek = toNumber(savings.previous_week_total)
+  // No percentage when the previous week is 0 (division by zero)
   const weekChange =
     previousWeek > 0 ? Math.round(((lastWeek - previousWeek) / previousWeek) * 100) : null
   const isUp = weekChange !== null && weekChange >= 0
@@ -49,7 +138,7 @@ function DashboardPage() {
           <h2 id="chart-title" className="text-xl font-bold mb-4">
             Last 30 days
           </h2>
-          <SavingsChart data={savings.daily} />
+          <SavingsChart data={daily} />
         </section>
 
         <section className={cardClass} aria-labelledby="categories-title">
@@ -57,10 +146,10 @@ function DashboardPage() {
             By category
           </h2>
           <ul className="flex flex-col gap-4">
-            {savings.by_category.map((item) => {
+            {categories.map((item) => {
               const percent = categoryTotal > 0 ? Math.round((item.amount / categoryTotal) * 100) : 0
               return (
-                <li key={item.name} className="flex flex-col gap-1 text-sm">
+                <li key={item.slug} className="flex flex-col gap-1 text-sm">
                   <div className="flex justify-between gap-4">
                     <span className="font-medium">{item.name}</span>
                     <span className="text-gray-600 whitespace-nowrap">
