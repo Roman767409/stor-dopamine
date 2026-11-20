@@ -1,4 +1,5 @@
-const categories = ['Category 1', 'Category 2', 'Category 3', 'Category 4', 'Category 5']
+import { useEffect, useState } from 'react'
+import api from '../api'
 
 const timer = [
   { value: '01', label: 'Days' },
@@ -8,6 +9,26 @@ const timer = [
 ]
 
 function HomePage() {
+  // Featured categories from GET /api/categories; empty if the request fails
+  const [categories, setCategories] = useState([])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    let cancelled = false
+    api
+      .get('/api/categories', { signal: controller.signal })
+      .then((response) => {
+        if (!cancelled) setCategories(response.data)
+      })
+      .catch(() => {
+        // Leave the section without items; the rest of the page still works
+      })
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [])
+
   return (
     <main className="max-w-[1100px] mx-auto px-6 py-10 flex flex-col gap-16">
       {/* Hero */}
@@ -27,10 +48,10 @@ function HomePage() {
       <section className="flex flex-col gap-8">
         <h2 className="text-2xl font-bold text-center">Featured Categories</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-6">
-          {categories.map((name) => (
-            <div key={name} className="flex flex-col items-center gap-3">
+          {categories.map((category) => (
+            <div key={category.slug} className="flex flex-col items-center gap-3">
               <div className="bg-gray-200 rounded-xl aspect-square w-full" />
-              <span className="text-sm font-medium">{name}</span>
+              <span className="text-sm font-medium">{category.name}</span>
             </div>
           ))}
         </div>

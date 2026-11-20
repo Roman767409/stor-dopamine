@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.errors import register_error_handlers
-from app.routers import analytics, auth, health, orders, products
+from app.routers import analytics, auth, categories, health, orders, products
 
 app = FastAPI()
 
@@ -17,6 +17,7 @@ register_error_handlers(app)
 
 app.include_router(health.router)
 app.include_router(products.router)
+app.include_router(categories.router)
 app.include_router(auth.router)
 app.include_router(orders.router)
 app.include_router(analytics.router, prefix="/api/analytics")

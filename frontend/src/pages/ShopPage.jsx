@@ -23,14 +23,6 @@ const SORT_OPTIONS = [
   { value: 'price_desc', label: 'Price high→low' },
 ]
 
-// TODO: replace with GET /api/categories
-const CATEGORIES = [
-  { slug: 'electronics', name: 'Електроніка' },
-  { slug: 'accessories', name: 'Аксесуари' },
-  { slug: 'clothing', name: 'Одяг' },
-  { slug: 'home', name: 'Дім' },
-]
-
 const EMPTY_FILTERS = { search: '', category: '', minPrice: '', maxPrice: '', sort: 'title_asc' }
 
 function ProductCard({ product }) {
@@ -98,12 +90,32 @@ function ShopPage() {
   // Остання відповідь сервера разом із ключем запиту, якому вона належить
   const [result, setResult] = useState({ key: null, items: [], total: 0, error: null })
   const [slowKey, setSlowKey] = useState(null)
+  // Categories for the filter; stays empty (only "All") if the request fails
+  const [categories, setCategories] = useState([])
 
   const params = buildParams(filters, query, page)
   const requestKey = JSON.stringify([params, attempt])
   // Поки відповідь не збігається з поточним запитом, вважаємо, що йде завантаження
   const isLoading = result.key !== requestKey
   const isSlow = isLoading && slowKey === requestKey
+
+  // Load the category list once; a failure must not block the product list
+  useEffect(() => {
+    const controller = new AbortController()
+    let cancelled = false
+    api
+      .get('/api/categories', { signal: controller.signal })
+      .then((response) => {
+        if (!cancelled) setCategories(response.data)
+      })
+      .catch(() => {
+        // Keep only "All" in the filter
+      })
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [])
 
   // Пошук відправляємо не на кожну літеру, а після паузи в наборі
   useEffect(() => {
@@ -196,9 +208,9 @@ function ShopPage() {
             className={inputClass}
           >
             <option value="">All</option>
-            {CATEGORIES.map((category) => (
+            {categories.map((category) => (
               <option key={category.slug} value={category.slug}>
-                {category.name}
+                {category.name} ({category.products_count})
               </option>
             ))}
           </select>
