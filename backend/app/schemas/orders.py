@@ -1,4 +1,5 @@
 import uuid
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -71,3 +72,23 @@ class OrderDetailResponse(BaseModel):
     created_at: str
     shipping_address: ShippingAddress
     items: list[OrderLineOut]
+
+
+OrderStatus = Literal["CREATED", "PROCESSING", "IN_TRANSIT", "DELIVERED"]
+
+
+# One lifecycle step of a parcel
+class TrackingStepOut(BaseModel):
+    status: OrderStatus
+    reached_at: str
+    is_reached: bool
+
+
+# Parcel tracking info with the four-step timeline
+class TrackingResponse(BaseModel):
+    tracking_number: str
+    order_id: str
+    status: OrderStatus
+    created_at: str
+    estimated_delivery_at: str
+    timeline: list[TrackingStepOut]

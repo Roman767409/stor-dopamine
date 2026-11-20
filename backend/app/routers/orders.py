@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, Header, Query, Response
+from fastapi import APIRouter, Depends, Header, Path, Query, Response
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
@@ -10,6 +10,7 @@ from app.schemas.orders import (
     CreateOrderRequest,
     OrderDetailResponse,
     OrderListResponse,
+    TrackingResponse,
 )
 from app.services import order_service
 
@@ -43,6 +44,17 @@ def list_orders(
     current_user: User = Depends(get_current_user),
 ):
     return order_service.list_orders(db, current_user.id, page, page_size)
+
+
+# Parcel tracking for the current user's order.
+# Registered before "/{order_id}" so the static "track" segment is matched first.
+@router.get("/track/{tracking_number}", response_model=TrackingResponse)
+def track_order(
+    tracking_number: str = Path(pattern=r"^DS-[A-Z0-9]{10}$"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return order_service.track_order(db, current_user.id, tracking_number)
 
 
 # Details of one order of the current user

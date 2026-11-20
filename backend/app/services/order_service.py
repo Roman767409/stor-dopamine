@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.models import Order, User
 from app.repositories import order_repository
 from app.schemas.orders import CreateOrderRequest
+from app.services import tracking_service
 
 TRACKING_PREFIX = "DS-"
 TRACKING_LENGTH = 10
@@ -152,12 +153,16 @@ def list_orders(db: Session, user_id: uuid.UUID, page: int, page_size: int) -> d
     rows = order_repository.list_user_orders(
         db, user_id, offset=(page - 1) * page_size, limit=page_size
     )
+    # Status is computed for display only; the list never writes to the DB
+    now = tracking_service.utc_now()
     return {
         "items": [
             {
                 "order_id": str(order.id),
                 "tracking_number": order.tracking_number,
-                "status": order.status,
+                "status": tracking_service.effective_status(
+                    order.status, order.created_at, now
+                ),
                 "total_price": float(order.total_price),
                 "created_at": order.created_at.isoformat(),
                 "items_count": items_count,
@@ -179,12 +184,16 @@ def get_order(db: Session, user_id: uuid.UUID, order_id: uuid.UUID) -> dict:
             detail={"code": "ORDER_NOT_FOUND", "message": "Order not found"},
         )
 
+    status = tracking_service.effective_status(
+        order.status, order.created_at, tracking_service.utc_now()
+    )
+
     # Sort lines by title so the response order is deterministic
     lines = sorted(order.items, key=lambda item: item.product.title)
-    return {
+    result = {
         "order_id": str(order.id),
         "tracking_number": order.tracking_number,
-        "status": order.status,
+        "status": status,
         "total_price": float(order.total_price),
         "created_at": order.created_at.isoformat(),
         "shipping_address": order.shipping_address,
@@ -201,3 +210,45 @@ def get_order(db: Session, user_id: uuid.UUID, order_id: uuid.UUID) -> dict:
             for item in lines
         ],
     }
+    # Commit after the response is built: commit expires the loaded objects
+    _commit_if_changed(db, order, status)
+    return result
+
+
+# Lazily persist the status if it moved forward; the only write on the read paths
+def _commit_if_changed(db: Session, order: Order, status: str) -> None:
+    if status == order.status:
+        return
+    try:
+        order_repository.advance_status(
+            db, order.id, status, tracking_service.statuses_before(status)
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+
+# Tracking info for the user's parcel; 404 for missing and foreign parcels alike
+def track_order(db: Session, user_id: uuid.UUID, tracking_number: str) -> dict:
+    order = order_repository.get_user_order_by_tracking(db, user_id, tracking_number)
+    if order is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "TRACKING_NOT_FOUND", "message": "Parcel not found"},
+        )
+
+    now = tracking_service.utc_now()
+    status = tracking_service.effective_status(order.status, order.created_at, now)
+    result = {
+        "tracking_number": order.tracking_number,
+        "order_id": str(order.id),
+        "status": status,
+        "created_at": order.created_at.isoformat(),
+        "estimated_delivery_at": tracking_service.estimated_delivery_at(
+            order.created_at
+        ).isoformat(),
+        "timeline": tracking_service.build_timeline(order.created_at, status, now),
+    }
+    _commit_if_changed(db, order, status)
+    return result

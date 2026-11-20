@@ -1,7 +1,7 @@
 import uuid
 from decimal import Decimal
 
-from sqlalchemy import exists, func, select
+from sqlalchemy import exists, func, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import Order, OrderItem, Product, User
@@ -116,3 +116,30 @@ def get_user_order_with_items(
         .where(Order.id == order_id, Order.user_id == user_id)
         .options(selectinload(Order.items).selectinload(OrderItem.product))
     ).one_or_none()
+
+
+# The user's order by tracking number; None for a missing or someone else's order
+def get_user_order_by_tracking(
+    db: Session, user_id: uuid.UUID, tracking_number: str
+) -> Order | None:
+    return db.scalars(
+        select(Order).where(
+            Order.tracking_number == tracking_number, Order.user_id == user_id
+        )
+    ).one_or_none()
+
+
+# Move the order to new_status only if it is still in one of the earlier statuses.
+# The condition keeps the status from going back when requests race. Returns True if updated.
+def advance_status(
+    db: Session, order_id: uuid.UUID, new_status: str, earlier_statuses: list[str]
+) -> bool:
+    if not earlier_statuses:
+        return False
+    result = db.execute(
+        update(Order)
+        .where(Order.id == order_id, Order.status.in_(earlier_statuses))
+        .values(status=new_status)
+        .execution_options(synchronize_session=False)
+    )
+    return result.rowcount > 0
