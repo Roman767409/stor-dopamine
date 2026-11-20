@@ -18,6 +18,15 @@ export function formatDate(value) {
   })
 }
 
+// Date in the browser's locale: "Nov 11, 2026" (en-US), "11 лист. 2026 р." (uk-UA)
+export function formatLocalDate(value) {
+  return new Date(value).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
+}
+
 // "2026-11-11T09:24:00Z" -> "11 Nov, 11:24"
 export function formatDateTime(value) {
   return new Date(value).toLocaleString('en-GB', {

@@ -1,18 +1,69 @@
-// Order details: items table, shipping address, tracking number, status and total (mock data)
+// Order details from GET /api/orders/{order_id}: items, shipping address, tracking number, status and total
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import api from '../api'
 import EmptyState from '../components/EmptyState'
+import ErrorState from '../components/ErrorState'
+import LoadingSkeleton from '../components/LoadingSkeleton'
 import PageContainer from '../components/PageContainer'
 import StatusBadge from '../components/StatusBadge'
-import { mockOrders } from '../mocks/mockData'
-import { formatDate, formatDp } from '../utils/format'
+import { formatDp, formatLocalDate } from '../utils/format'
 import { btnSecondary, cardClass, focusRing } from '../utils/styles'
+
+// 404 ORDER_NOT_FOUND (missing or someone else's order) or 422 (id is not a UUID)
+function isNotFound(error) {
+  const status = error.response?.status
+  return (
+    (status === 404 && error.response?.data?.error?.code === 'ORDER_NOT_FOUND') ||
+    status === 422
+  )
+}
 
 function OrderDetailsPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const order = mockOrders.find((item) => item.id === id)
+  const [attempt, setAttempt] = useState(0)
+  // Last server response together with the request key it belongs to
+  const [result, setResult] = useState({ key: null, order: null, notFound: false, error: null })
 
-  if (!order) {
+  const requestKey = JSON.stringify([id, attempt])
+  const isLoading = result.key !== requestKey
+
+  useEffect(() => {
+    // Ignore the response if the route changed while the request was in flight
+    let cancelled = false
+    const [orderId] = JSON.parse(requestKey)
+
+    api
+      .get(`/api/orders/${encodeURIComponent(orderId)}`)
+      .then((response) => {
+        if (cancelled) return
+        setResult({ key: requestKey, order: response.data, notFound: false, error: null })
+      })
+      .catch((error) => {
+        if (cancelled) return
+        setResult({
+          key: requestKey,
+          order: null,
+          notFound: isNotFound(error),
+          error: error.response?.data?.error?.message || 'Could not load the order',
+        })
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [requestKey])
+
+  if (isLoading) {
+    return (
+      <PageContainer title="Order details">
+        <LoadingSkeleton variant="list" count={3} />
+      </PageContainer>
+    )
+  }
+
+  if (result.notFound) {
     return (
       <PageContainer>
         <EmptyState
@@ -25,6 +76,15 @@ function OrderDetailsPage() {
     )
   }
 
+  if (result.error) {
+    return (
+      <PageContainer title="Order details">
+        <ErrorState message={result.error} onRetry={() => setAttempt((value) => value + 1)} />
+      </PageContainer>
+    )
+  }
+
+  const { order } = result
   const address = order.shipping_address
 
   return (
@@ -55,7 +115,7 @@ function OrderDetailsPage() {
             </thead>
             <tbody>
               {order.items.map((item) => (
-                <tr key={item.title} className="border-b border-gray-200">
+                <tr key={item.product_id} className="border-b border-gray-200">
                   <td className="py-4 pr-4">
                     <span className="font-medium break-words">{item.title}</span>
                     <span className="block sm:hidden text-xs text-gray-600">
@@ -67,7 +127,7 @@ function OrderDetailsPage() {
                     {formatDp(item.price_at_purchase)} DP
                   </td>
                   <td className="py-4 pl-2 text-right whitespace-nowrap">
-                    {formatDp(item.price_at_purchase * item.quantity)} DP
+                    {formatDp(item.line_total)} DP
                   </td>
                 </tr>
               ))}
@@ -84,6 +144,7 @@ function OrderDetailsPage() {
             <h2 className="text-xs text-gray-600">Tracking number</h2>
             <Link
               to={`/tracking/${order.tracking_number}`}
+              state={{ order }}
               className={`font-semibold underline break-all rounded ${focusRing}`}
             >
               {order.tracking_number}
@@ -95,7 +156,7 @@ function OrderDetailsPage() {
           </div>
           <div>
             <h2 className="text-xs text-gray-600">Ordered on</h2>
-            <p className="font-medium">{formatDate(order.created_at)}</p>
+            <p className="font-medium">{formatLocalDate(order.created_at)}</p>
           </div>
           <div>
             <h2 className="text-xs text-gray-600">Shipping address</h2>
