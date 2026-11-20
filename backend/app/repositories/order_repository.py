@@ -1,8 +1,8 @@
 import uuid
 from decimal import Decimal
 
-from sqlalchemy import exists, select
-from sqlalchemy.orm import Session
+from sqlalchemy import exists, func, select
+from sqlalchemy.orm import Session, selectinload
 
 from app.models import Order, OrderItem, Product, User
 
@@ -72,3 +72,47 @@ def create_order(
     db.flush()
 
     return order
+
+
+# Number of orders that belong to the user
+def count_user_orders(db: Session, user_id: uuid.UUID) -> int:
+    return db.scalar(
+        select(func.count()).select_from(Order).where(Order.user_id == user_id)
+    ) or 0
+
+
+# One page of the user's orders (newest first) with the summed item quantity.
+# items_count comes from a single aggregate subquery, so there is no N+1.
+def list_user_orders(
+    db: Session, user_id: uuid.UUID, offset: int, limit: int
+) -> list[tuple[Order, int]]:
+    items_count = (
+        select(
+            OrderItem.order_id,
+            func.sum(OrderItem.quantity).label("items_count"),
+        )
+        .group_by(OrderItem.order_id)
+        .subquery()
+    )
+    rows = db.execute(
+        select(Order, func.coalesce(items_count.c.items_count, 0))
+        .outerjoin(items_count, items_count.c.order_id == Order.id)
+        .where(Order.user_id == user_id)
+        # id as a tie-breaker keeps pagination stable for equal timestamps
+        .order_by(Order.created_at.desc(), Order.id.desc())
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    return [(order, int(count)) for order, count in rows]
+
+
+# The user's order with items and their products loaded eagerly (no N+1).
+# Returns None both for a missing order and for someone else's order.
+def get_user_order_with_items(
+    db: Session, user_id: uuid.UUID, order_id: uuid.UUID
+) -> Order | None:
+    return db.scalars(
+        select(Order)
+        .where(Order.id == order_id, Order.user_id == user_id)
+        .options(selectinload(Order.items).selectinload(OrderItem.product))
+    ).one_or_none()

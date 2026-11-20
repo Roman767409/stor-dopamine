@@ -144,3 +144,60 @@ def place_order(
     except Exception:
         db.rollback()
         raise
+
+
+# Paginated history of the current user's orders, newest first
+def list_orders(db: Session, user_id: uuid.UUID, page: int, page_size: int) -> dict:
+    total = order_repository.count_user_orders(db, user_id)
+    rows = order_repository.list_user_orders(
+        db, user_id, offset=(page - 1) * page_size, limit=page_size
+    )
+    return {
+        "items": [
+            {
+                "order_id": str(order.id),
+                "tracking_number": order.tracking_number,
+                "status": order.status,
+                "total_price": float(order.total_price),
+                "created_at": order.created_at.isoformat(),
+                "items_count": items_count,
+            }
+            for order, items_count in rows
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+# Details of one order; 404 for missing and foreign orders alike
+def get_order(db: Session, user_id: uuid.UUID, order_id: uuid.UUID) -> dict:
+    order = order_repository.get_user_order_with_items(db, user_id, order_id)
+    if order is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "ORDER_NOT_FOUND", "message": "Order not found"},
+        )
+
+    # Sort lines by title so the response order is deterministic
+    lines = sorted(order.items, key=lambda item: item.product.title)
+    return {
+        "order_id": str(order.id),
+        "tracking_number": order.tracking_number,
+        "status": order.status,
+        "total_price": float(order.total_price),
+        "created_at": order.created_at.isoformat(),
+        "shipping_address": order.shipping_address,
+        "items": [
+            {
+                "product_id": str(item.product_id),
+                "title": item.product.title,
+                "quantity": item.quantity,
+                "price_at_purchase": float(item.price_at_purchase),
+                "line_total": float(
+                    (item.price_at_purchase * item.quantity).quantize(Decimal("0.01"))
+                ),
+            }
+            for item in lines
+        ],
+    }

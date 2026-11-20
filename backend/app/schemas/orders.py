@@ -33,3 +33,41 @@ class CreateOrderRequest(BaseModel):
         if len(product_ids) != len(set(product_ids)):
             raise ValueError("Duplicate products in items")
         return value
+
+
+# Order summary row in the order history list
+class OrderSummaryOut(BaseModel):
+    order_id: str
+    tracking_number: str
+    status: str
+    total_price: float
+    created_at: str
+    items_count: int
+
+
+# Paginated order history
+class OrderListResponse(BaseModel):
+    items: list[OrderSummaryOut]
+    total: int
+    page: int
+    page_size: int
+
+
+# Single line of an order in the order details
+class OrderLineOut(BaseModel):
+    product_id: str
+    title: str
+    quantity: int
+    price_at_purchase: float
+    line_total: float
+
+
+# Full order details with shipping address and lines
+class OrderDetailResponse(BaseModel):
+    order_id: str
+    tracking_number: str
+    status: str
+    total_price: float
+    created_at: str
+    shipping_address: ShippingAddress
+    items: list[OrderLineOut]

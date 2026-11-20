@@ -1,10 +1,16 @@
-from fastapi import APIRouter, Depends, Header, Response
+import uuid
+
+from fastapi import APIRouter, Depends, Header, Query, Response
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import User
-from app.schemas.orders import CreateOrderRequest
+from app.schemas.orders import (
+    CreateOrderRequest,
+    OrderDetailResponse,
+    OrderListResponse,
+)
 from app.services import order_service
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
@@ -26,3 +32,24 @@ def create_order(
     )
     response.status_code = 201 if created else 200
     return result
+
+
+# Order history of the current user, newest first
+@router.get("", response_model=OrderListResponse)
+def list_orders(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=50),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return order_service.list_orders(db, current_user.id, page, page_size)
+
+
+# Details of one order of the current user
+@router.get("/{order_id}", response_model=OrderDetailResponse)
+def get_order(
+    order_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return order_service.get_order(db, current_user.id, order_id)
