@@ -5,6 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -200,4 +201,32 @@ class OrderItem(Base):
             "order_id", "product_id", name="uq_order_items_order_product"
         ),
         Index("ix_order_items_order", "order_id"),
+    )
+
+
+# Append-only audit trail of important operations.
+# UPDATE, DELETE and TRUNCATE are blocked by DB triggers (see the migration).
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    # No ON DELETE action: users are never deleted, and the log must not change
+    actor_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
+    # Snapshot of the actor's email at the time of the event
+    actor_email: Mapped[str | None] = mapped_column(String(254), nullable=True)
+    action: Mapped[str] = mapped_column(String(64), nullable=False)
+    entity_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    entity_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    details: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index("ix_audit_logs_created_at", desc(created_at)),
+        Index("ix_audit_logs_action", "action"),
+        Index("ix_audit_logs_actor_user_id", "actor_user_id"),
     )
