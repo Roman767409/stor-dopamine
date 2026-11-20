@@ -1,37 +1,95 @@
-// Parcel tracking: search by tracking number and a vertical status timeline (mock data)
-import { useState } from 'react'
-import { useLocation, useNavigate, useParams } from 'react-router-dom'
+// Parcel tracking: search by tracking number and a vertical status timeline
+// from GET /api/orders/track/{tracking_number}, refreshed every 5 s until delivered
+import { useEffect, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import api from '../api'
+import ErrorState from '../components/ErrorState'
+import LoadingSkeleton from '../components/LoadingSkeleton'
 import PageContainer from '../components/PageContainer'
 import StatusBadge from '../components/StatusBadge'
-import { mockOrders } from '../mocks/mockData'
-import { addDays, formatDate } from '../utils/format'
-import { ORDER_STEPS } from '../utils/orderStatus'
+import { formatLocalDate } from '../utils/format'
+import { getStatusLabel } from '../utils/orderStatus'
 import { btnPrimary, cardClass, errorClass, inputClass, labelClass } from '../utils/styles'
 
 const TRACKING_PATTERN = /^DS-[A-Z0-9]{10}$/
 const FORMAT_ERROR = 'Wrong format. Example: DS-1A2B3C4D5E'
 const NOT_FOUND_ERROR = 'Parcel not found'
+const POLL_INTERVAL_MS = 5000
 
-// Finds the parcel for the number from the URL; a fresh order can come from the success page
-function findParcel(trackingNumber, stateOrder) {
-  if (!trackingNumber) return { order: null, error: '' }
-  if (!TRACKING_PATTERN.test(trackingNumber)) return { order: null, error: FORMAT_ERROR }
-  const order =
-    mockOrders.find((item) => item.tracking_number === trackingNumber) ??
-    (stateOrder?.tracking_number === trackingNumber ? stateOrder : null)
-  return order ? { order, error: '' } : { order: null, error: NOT_FOUND_ERROR }
+// 404 TRACKING_NOT_FOUND (missing or someone else's parcel) or 422 (rejected format)
+function isNotFound(error) {
+  const status = error.response?.status
+  return (
+    (status === 404 && error.response?.data?.error?.code === 'TRACKING_NOT_FOUND') ||
+    status === 422
+  )
 }
 
 function TrackingPage() {
   const params = useParams()
-  const location = useLocation()
   const navigate = useNavigate()
-  const trackingNumber = params.trackingNumber?.toUpperCase()
-  const [value, setValue] = useState(trackingNumber ?? '')
+  const trackingNumber = params.trackingNumber?.toUpperCase() ?? ''
+  const [value, setValue] = useState(trackingNumber)
   const [formError, setFormError] = useState('')
+  const [attempt, setAttempt] = useState(0)
+  // Last server answer together with the request key it belongs to
+  const [result, setResult] = useState({ key: null, parcel: null, notFound: false, error: null })
 
-  const { order, error: lookupError } = findParcel(trackingNumber, location.state?.order)
-  const error = formError || lookupError
+  // No request for an empty or malformed number
+  const isValidNumber = TRACKING_PATTERN.test(trackingNumber)
+  const requestKey = isValidNumber ? JSON.stringify([trackingNumber, attempt]) : null
+  // Answers for another number (or an older attempt) are never shown
+  const current = requestKey !== null && result.key === requestKey ? result : null
+  // Skeleton only until the first answer; background refreshes keep the old data on screen
+  const isLoading = requestKey !== null && current === null
+
+  useEffect(() => {
+    if (requestKey === null) return
+    const [number] = JSON.parse(requestKey)
+    const controller = new AbortController()
+    let stopped = false
+    let timer = null
+
+    // One request at a time: the next poll is scheduled only after this one finishes
+    function poll(isFirst) {
+      api
+        .get(`/api/orders/track/${encodeURIComponent(number)}`, { signal: controller.signal })
+        .then((response) => {
+          if (stopped) return
+          setResult({ key: requestKey, parcel: response.data, notFound: false, error: null })
+          // Delivered is the final status: stop polling
+          if (response.data.status !== 'DELIVERED') {
+            timer = setTimeout(() => poll(false), POLL_INTERVAL_MS)
+          }
+        })
+        .catch((error) => {
+          if (stopped) return
+          const notFound = isNotFound(error)
+          if (isFirst || notFound) {
+            setResult({
+              key: requestKey,
+              parcel: null,
+              notFound,
+              error: notFound
+                ? null
+                : error.response?.data?.error?.message || 'Could not load tracking info',
+            })
+            return
+          }
+          // Failed background refresh: keep the last data and try again on the next tick
+          timer = setTimeout(() => poll(false), POLL_INTERVAL_MS)
+        })
+    }
+
+    poll(true)
+
+    // Number changed, retry pressed or page left: stop the timer and drop the request
+    return () => {
+      stopped = true
+      clearTimeout(timer)
+      controller.abort()
+    }
+  }, [requestKey])
 
   function handleSubmit(event) {
     event.preventDefault()
@@ -42,12 +100,15 @@ function TrackingPage() {
     }
     setFormError('')
     setValue(normalized)
-    navigate(`/tracking/${normalized}`, { state: location.state })
+    navigate(`/tracking/${normalized}`)
   }
 
-  const currentIndex = order ? ORDER_STEPS.findIndex((step) => step.status === order.status) : -1
-  const lastStep = ORDER_STEPS[ORDER_STEPS.length - 1]
-  const deliveryDate = order ? addDays(order.created_at, lastStep.dayOffset) : null
+  let lookupError = ''
+  if (trackingNumber && !isValidNumber) lookupError = FORMAT_ERROR
+  else if (current?.notFound) lookupError = NOT_FOUND_ERROR
+  const error = formError || lookupError
+
+  const parcel = current?.parcel ?? null
 
   return (
     <PageContainer title="Track parcel">
@@ -81,21 +142,36 @@ function TrackingPage() {
         )}
       </form>
 
-      {order && !formError && (
+      {isLoading && !formError && (
+        <div className="mt-10 max-w-xl">
+          <LoadingSkeleton variant="list" count={2} />
+        </div>
+      )}
+
+      {current?.error && !formError && (
+        <div className="max-w-xl">
+          <ErrorState message={current.error} onRetry={() => setAttempt((count) => count + 1)} />
+        </div>
+      )}
+
+      {parcel && !formError && (
         <section className={`mt-10 max-w-xl ${cardClass}`} aria-labelledby="parcel-title">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
             <h2 id="parcel-title" className="text-xl font-bold break-all">
-              {order.tracking_number}
+              {parcel.tracking_number}
             </h2>
-            <StatusBadge status={order.status} />
+            {/* Polite live region: screen readers hear the status when polling changes it */}
+            <span aria-live="polite">
+              <StatusBadge status={parcel.status} />
+            </span>
           </div>
 
           <ol className="flex flex-col">
-            {ORDER_STEPS.map((step, index) => {
-              const isDone = index < currentIndex
-              const isCurrent = index === currentIndex
-              const date = addDays(order.created_at, step.dayOffset)
-              const isLast = index === ORDER_STEPS.length - 1
+            {parcel.timeline.map((step, index) => {
+              // Current = the reported status; done = reached earlier steps; the rest are inactive
+              const isCurrent = step.status === parcel.status
+              const isDone = step.is_reached && !isCurrent
+              const isLast = index === parcel.timeline.length - 1
 
               let dotClass = 'bg-white border-2 border-gray-300'
               if (isCurrent) dotClass = 'bg-green-400 text-white ring-4 ring-green-100'
@@ -121,11 +197,13 @@ function TrackingPage() {
                   </span>
                   <div className="flex flex-col">
                     <span className={`font-semibold ${labelColor}`}>
-                      {step.label}
+                      {getStatusLabel(step.status)}
                       {isCurrent && <span className="sr-only"> (current status)</span>}
                     </span>
                     <span className="text-sm text-gray-600">
-                      {index <= currentIndex ? formatDate(date) : `Expected ${formatDate(date)}`}
+                      {step.is_reached
+                        ? formatLocalDate(step.reached_at)
+                        : `Expected ${formatLocalDate(step.reached_at)}`}
                     </span>
                   </div>
                 </li>
@@ -135,9 +213,9 @@ function TrackingPage() {
 
           <p className="mt-6 pt-4 border-t border-gray-200 text-sm">
             <span className="text-gray-600">
-              {order.status === 'DELIVERED' ? 'Delivered: ' : 'Estimated delivery: '}
+              {parcel.status === 'DELIVERED' ? 'Delivered: ' : 'Estimated delivery: '}
             </span>
-            <span className="font-semibold">{formatDate(deliveryDate)}</span>
+            <span className="font-semibold">{formatLocalDate(parcel.estimated_delivery_at)}</span>
           </p>
         </section>
       )}
