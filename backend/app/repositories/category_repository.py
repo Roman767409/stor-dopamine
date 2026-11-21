@@ -26,3 +26,8 @@ def list_with_active_counts(db: Session) -> list[Row]:
             .order_by(Category.name, Category.id)
         ).all()
     )
+
+
+# Category by id, or None
+def get_by_id(db: Session, category_id: int) -> Category | None:
+    return db.get(Category, category_id)

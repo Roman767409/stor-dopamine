@@ -22,8 +22,9 @@ STATUS_CODES = {
 }
 
 
-# Returns the request id stored by the middleware, or a fresh one as a fallback
-def _get_request_id(request: Request) -> str:
+# Returns the request id stored by the middleware, or a fresh one as a fallback.
+# Public so that services (e.g. audit logging) use the same id as error responses.
+def get_request_id(request: Request) -> str:
     request_id = getattr(request.state, "request_id", None)
     if not request_id:
         request_id = uuid.uuid4().hex
@@ -40,7 +41,7 @@ def error_response(
     details: Any = None,
     headers: dict[str, str] | None = None,
 ) -> JSONResponse:
-    request_id = _get_request_id(request)
+    request_id = get_request_id(request)
     response_headers = dict(headers or {})
     # Set here too: 500 responses bypass the http middleware
     response_headers[REQUEST_ID_HEADER] = request_id
@@ -121,7 +122,7 @@ def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception):
         logger.exception(
-            "Unhandled error (request_id=%s)", _get_request_id(request), exc_info=exc
+            "Unhandled error (request_id=%s)", get_request_id(request), exc_info=exc
         )
         return error_response(
             request, 500, "INTERNAL_ERROR", "Internal server error"

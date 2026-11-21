@@ -81,3 +81,61 @@ def get_active_by_id(db: Session, product_id: uuid.UUID) -> Product | None:
         .options(joinedload(Product.category))
         .where(Product.id == product_id, Product.is_active.is_(True))
     )
+
+
+# --- Admin queries (no commit here; the service owns the transaction) ---
+
+
+# Page of all products (active or not) with categories + total count.
+# Category is joined eagerly to avoid N+1.
+def search_all(
+    db: Session,
+    *,
+    page: int,
+    page_size: int,
+    q: str | None = None,
+    is_active: bool | None = None,
+) -> tuple[list[Product], int]:
+    filters = []
+    if q:
+        filters.append(Product.title.ilike(f"%{_escape_like(q)}%", escape="\\"))
+    if is_active is not None:
+        filters.append(Product.is_active.is_(is_active))
+
+    total = db.scalar(select(func.count()).select_from(Product).where(*filters)) or 0
+    items = (
+        db.scalars(
+            select(Product)
+            .options(joinedload(Product.category))
+            .where(*filters)
+            .order_by(Product.created_at.desc(), Product.id.asc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        .unique()
+        .all()
+    )
+    return list(items), total
+
+
+# Any product by id (active or not) with its category.
+# for_update locks the row so concurrent admin edits don't overwrite each other.
+def get_by_id(
+    db: Session, product_id: uuid.UUID, *, for_update: bool = False
+) -> Product | None:
+    query = (
+        select(Product)
+        .options(joinedload(Product.category))
+        .where(Product.id == product_id)
+    )
+    if for_update:
+        # Lock only the products row, not the joined category
+        query = query.with_for_update(of=Product)
+    return db.scalar(query)
+
+
+# Add a new product to the session and flush so id and timestamps are set
+def create(db: Session, product: Product) -> Product:
+    db.add(product)
+    db.flush()
+    return product
