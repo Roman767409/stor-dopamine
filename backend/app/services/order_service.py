@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.models import Order, User
 from app.repositories import order_repository
 from app.schemas.orders import CreateOrderRequest
-from app.services import tracking_service
+from app.services import audit_service, tracking_service
 
 TRACKING_PREFIX = "DS-"
 TRACKING_LENGTH = 10
@@ -126,6 +126,20 @@ def place_order(
         )
         user.virtual_balance -= total
         user.total_saved_amount += total
+
+        # Audit entry in the same transaction: saved only together with the order
+        audit_service.record(
+            db,
+            actor=user,
+            action="ORDER_CREATED",
+            entity_type="order",
+            entity_id=order.id,
+            details={
+                "tracking_number": tracking_number,
+                "total_price": float(total),
+                "items_count": sum(quantity for _, quantity, _ in order_items),
+            },
+        )
 
         db.commit()
         db.refresh(order)

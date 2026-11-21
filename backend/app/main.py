@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.errors import register_error_handlers
 from app.routers import (
+    admin_logs,
     admin_products,
     analytics,
     auth,
@@ -30,3 +31,4 @@ app.include_router(auth.router)
 app.include_router(orders.router)
 app.include_router(analytics.router, prefix="/api/analytics")
 app.include_router(admin_products.router)
+app.include_router(admin_logs.router)
