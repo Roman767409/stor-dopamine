@@ -1,14 +1,22 @@
-// Admin modal form for adding or editing a product (works on local state only)
+// Admin modal form for adding or editing a product; the parent sends the request
 import { useState } from 'react'
 import FormField from './FormField'
 import Modal from './Modal'
-import { btnPrimary, btnSecondary, focusRing } from '../utils/styles'
+import { btnPrimary, btnSecondary, errorClass, focusRing } from '../utils/styles'
 
-function ProductFormModal({ product, categories, onSave, onCancel }) {
+// Backend limits (app/schemas/admin_products.py)
+const TITLE_MAX_LENGTH = 120
+const IMAGE_URL_MAX_LENGTH = 500
+// Positive number with at most 10 integer digits and 2 decimals (Numeric(12, 2))
+const PRICE_PATTERN = /^\d{1,10}(\.\d{1,2})?$/
+
+// categories: [{ id, name, slug }] from GET /api/categories;
+// isSaving disables the buttons, serverError is shown above them
+function ProductFormModal({ product, categories, isSaving, serverError, onSave, onCancel }) {
   const [values, setValues] = useState(() => ({
     title: product?.title ?? '',
     description: product?.description ?? '',
-    category_slug: product?.category_slug ?? categories[0]?.slug ?? '',
+    category_id: String(product?.category?.id ?? categories[0]?.id ?? ''),
     price: product ? String(product.price) : '',
     image_url: product?.image_url ?? '',
     is_active: product?.is_active ?? true,
@@ -22,15 +30,19 @@ function ProductFormModal({ product, categories, onSave, onCancel }) {
   function validate() {
     const nextErrors = {}
     if (values.title.trim() === '') nextErrors.title = 'Enter a title'
-    else if (values.title.trim().length > 120) nextErrors.title = 'Max 120 characters'
-    if (!values.category_slug) nextErrors.category_slug = 'Choose a category'
-    const price = Number(values.price)
-    if (values.price === '' || Number.isNaN(price) || price <= 0) {
-      nextErrors.price = 'Price must be greater than 0'
+    else if (values.title.trim().length > TITLE_MAX_LENGTH) {
+      nextErrors.title = `Max ${TITLE_MAX_LENGTH} characters`
+    }
+    if (!values.category_id) nextErrors.category_id = 'Choose a category'
+    const price = values.price.trim()
+    if (!PRICE_PATTERN.test(price) || Number(price) <= 0) {
+      nextErrors.price = 'Price must be greater than 0, with at most 2 decimal places'
     }
     const imageUrl = values.image_url.trim()
     if (imageUrl && !/^https?:\/\//.test(imageUrl)) {
       nextErrors.image_url = 'URL must start with http:// or https://'
+    } else if (imageUrl.length > IMAGE_URL_MAX_LENGTH) {
+      nextErrors.image_url = `Max ${IMAGE_URL_MAX_LENGTH} characters`
     }
     return nextErrors
   }
@@ -39,15 +51,14 @@ function ProductFormModal({ product, categories, onSave, onCancel }) {
     event.preventDefault()
     const nextErrors = validate()
     setErrors(nextErrors)
-    if (Object.keys(nextErrors).length > 0) return
+    if (Object.keys(nextErrors).length > 0 || isSaving) return
 
-    const category = categories.find((item) => item.slug === values.category_slug)
+    // Price goes as a string so the backend Decimal gets exactly what was typed
     onSave({
       title: values.title.trim(),
       description: values.description.trim(),
-      category: category?.name ?? '',
-      category_slug: values.category_slug,
-      price: Math.round(Number(values.price) * 100) / 100,
+      category_id: Number(values.category_id),
+      price: values.price.trim(),
       image_url: values.image_url.trim() || null,
       is_active: values.is_active,
     })
@@ -76,12 +87,12 @@ function ProductFormModal({ product, categories, onSave, onCancel }) {
             id="product-category"
             label="Category"
             as="select"
-            value={values.category_slug}
-            error={errors.category_slug}
-            onChange={(event) => update('category_slug', event.target.value)}
+            value={values.category_id}
+            error={errors.category_id}
+            onChange={(event) => update('category_id', event.target.value)}
           >
             {categories.map((category) => (
-              <option key={category.slug} value={category.slug}>
+              <option key={category.id} value={String(category.id)}>
                 {category.name}
               </option>
             ))}
@@ -117,11 +128,17 @@ function ProductFormModal({ product, categories, onSave, onCancel }) {
           Active (visible in the shop)
         </label>
 
+        {serverError && (
+          <p role="alert" className={errorClass}>
+            {serverError}
+          </p>
+        )}
+
         <div className="mt-2 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-          <button type="button" onClick={onCancel} className={btnSecondary}>
+          <button type="button" onClick={onCancel} disabled={isSaving} className={btnSecondary}>
             Cancel
           </button>
-          <button type="submit" className={btnPrimary}>
+          <button type="submit" disabled={isSaving} className={btnPrimary}>
             {product ? 'Save changes' : 'Add product'}
           </button>
         </div>

@@ -1,5 +1,11 @@
 // Number and date formatting shared by the screens
 
+// Any missing or non-numeric value becomes 0, so the page never shows NaN
+export function toNumber(value) {
+  const number = Number(value)
+  return Number.isFinite(number) ? number : 0
+}
+
 // 95500 -> "95 500"; shows cents only when they are not zero: 99.5 -> "99.50"
 export function formatDp(amount) {
   const number = Number(amount) || 0
