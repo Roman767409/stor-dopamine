@@ -19,6 +19,7 @@ import AdminLogsPage from './pages/AdminLogsPage'
 import AdminAnalyticsPage from './pages/AdminAnalyticsPage'
 import NotFoundPage from './pages/NotFoundPage'
 import ScreensIndexPage from './pages/ScreensIndexPage'
+import AboutPage from './pages/AboutPage'
 import ProtectedRoute from './components/ProtectedRoute'
 import AdminRoute from './components/AdminRoute'
 import AdminLayout from './components/AdminLayout'
@@ -35,6 +36,7 @@ function AppLayout() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/shop" element={<ShopPage />} />
+        <Route path="/about" element={<AboutPage />} />
         <Route path="/product/:id" element={<ProductPage />} />
         <Route path="/cart" element={<CartPage />} />
         <Route path="/login" element={<AuthPage />} />

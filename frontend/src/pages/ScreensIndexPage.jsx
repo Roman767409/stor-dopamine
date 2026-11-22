@@ -1,21 +1,18 @@
 // Service page for the designer: every route of the app with links and testing tips
 import { Link } from 'react-router-dom'
 import PageContainer from '../components/PageContainer'
-import { mockOrders, mockProducts } from '../mocks/mockData'
 import { focusRing } from '../utils/styles'
 
 const SCREENS = [
   { path: '/', name: 'Home', access: 'No' },
   { path: '/shop', name: 'Shop (catalog, filters, pagination)', access: 'No' },
-  { path: `/product/${mockProducts[0].id}`, name: 'Product', access: 'No' },
+  { path: '/about', name: 'About us', access: 'No' },
   { path: '/cart', name: 'Cart', access: 'No' },
   { path: '/login', name: 'Log in / Sign up', access: 'No' },
   { path: '/checkout', name: 'Checkout', access: 'Yes' },
   { path: '/order-success', name: 'Order success (without an order redirects to /shop)', access: 'No' },
   { path: '/tracking', name: 'Track parcel', access: 'No' },
-  { path: `/tracking/${mockOrders[0].tracking_number}`, name: 'Tracking result', access: 'No' },
   { path: '/orders', name: 'My orders', access: 'Yes' },
-  { path: `/orders/${mockOrders[0].id}`, name: 'Order details', access: 'Yes' },
   { path: '/dashboard', name: 'Savings dashboard', access: 'Yes' },
   { path: '/profile', name: 'Profile', access: 'Yes' },
   { path: '/admin', name: 'Admin: products', access: 'Admin' },
@@ -26,11 +23,14 @@ const SCREENS = [
 ]
 
 const TIPS = [
+  { path: '/shop', text: 'open any product to see the product page.' },
+  { path: '/orders', text: 'press "Details" on any of your orders.' },
   { path: '/orders?empty=1', text: 'shows the empty orders list.' },
   { path: null, text: 'Type "error" in the DopaBot chat (bottom-right button) to see its error state.' },
   { path: '/admin', text: 'opened by a non-admin user shows the 403 "no access" page.' },
   { path: '/checkout', text: 'accepts the test card 4242 4242 4242 4242, any future MM/YY and any 3-digit CVC; paying leads to the order success page.' },
   { path: '/tracking', text: 'try DS-1A2B3C4D5E (not found) or "abc" (wrong format).' },
+  { path: '/orders', text: 'press "Track" on any of your orders to see the tracking result.' },
 ]
 
 const linkClass = `font-medium underline break-all rounded ${focusRing}`
