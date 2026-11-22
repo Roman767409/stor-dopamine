@@ -106,11 +106,11 @@ function cartSignature(items) {
 // Maps an API error to a message shown above the pay button
 function getOrderErrorMessage(error) {
   const data = error?.response?.data?.error
-  if (data?.code === 'INSUFFICIENT_FUNDS') return 'Недостатньо Dopamine Points'
+  if (data?.code === 'INSUFFICIENT_FUNDS') return 'Not enough Dopamine Points'
   if (data?.code === 'PRODUCT_UNAVAILABLE') {
-    return 'Один із товарів більше недоступний. Оновіть кошик'
+    return 'One of the products is no longer available. Please update your cart'
   }
-  return data?.message || 'Щось пішло не так, спробуйте ще раз'
+  return data?.message || 'Something went wrong, please try again'
 }
 
 function CheckoutPage() {

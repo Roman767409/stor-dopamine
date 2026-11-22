@@ -7,7 +7,7 @@ import ErrorState from '../components/ErrorState'
 import LoadingSkeleton from '../components/LoadingSkeleton'
 import PageContainer from '../components/PageContainer'
 import StatusBadge from '../components/StatusBadge'
-import { formatLocalDate } from '../utils/format'
+import { formatLocalDateTime } from '../utils/format'
 import { getStatusLabel } from '../utils/orderStatus'
 import { btnPrimary, cardClass, errorClass, inputClass, labelClass } from '../utils/styles'
 
@@ -202,8 +202,8 @@ function TrackingPage() {
                     </span>
                     <span className="text-sm text-gray-600">
                       {step.is_reached
-                        ? formatLocalDate(step.reached_at)
-                        : `Expected ${formatLocalDate(step.reached_at)}`}
+                        ? formatLocalDateTime(step.reached_at)
+                        : `Expected ${formatLocalDateTime(step.reached_at)}`}
                     </span>
                   </div>
                 </li>
@@ -215,7 +215,7 @@ function TrackingPage() {
             <span className="text-gray-600">
               {parcel.status === 'DELIVERED' ? 'Delivered: ' : 'Estimated delivery: '}
             </span>
-            <span className="font-semibold">{formatLocalDate(parcel.estimated_delivery_at)}</span>
+            <span className="font-semibold">{formatLocalDateTime(parcel.estimated_delivery_at)}</span>
           </p>
         </section>
       )}

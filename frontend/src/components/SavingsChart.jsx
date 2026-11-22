@@ -15,7 +15,8 @@ function formatDay(isoDate) {
   })
 }
 
-function SavingsChart({ data }) {
+// label: accessible name of the chart; defaults to the savings dashboard wording
+function SavingsChart({ data, label }) {
   const containerRef = useRef(null)
   const [width, setWidth] = useState(0)
 
@@ -45,7 +46,7 @@ function SavingsChart({ data }) {
           width={width}
           height={HEIGHT}
           role="img"
-          aria-label={`Saved DP per day for the last ${data.length} days`}
+          aria-label={label ?? `Saved DP per day for the last ${data.length} days`}
           className="block"
         >
           {/* Y axis: grid lines and values */}

@@ -141,7 +141,7 @@ function AdminAnalyticsPage() {
           <h2 id="chart-title" className="text-xl font-bold mb-4">
             Last {DAYS} days
           </h2>
-          <SavingsChart data={daily} />
+          <SavingsChart data={daily} label="Orders volume per day (DP)" />
         </section>
 
         <section className={cardClass} aria-labelledby="categories-title">

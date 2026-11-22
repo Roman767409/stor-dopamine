@@ -6,7 +6,7 @@ import EmptyState from '../components/EmptyState'
 import ErrorState from '../components/ErrorState'
 import LoadingSkeleton from '../components/LoadingSkeleton'
 import { FORBIDDEN_MESSAGE, getApiError, getErrorMessage, isForbidden } from '../utils/apiErrors'
-import { formatDateTime } from '../utils/format'
+import { formatLocalDateTime } from '../utils/format'
 import { btnSmall, errorClass, inputClass, labelClass } from '../utils/styles'
 
 const PAGE_SIZE = 20
@@ -272,12 +272,12 @@ function AdminLogsPage() {
                   <Fragment key={log.id}>
                     <tr className={`align-top ${isExpanded ? '' : 'border-b border-gray-200'}`}>
                       <td className="hidden sm:table-cell py-4 pr-4 whitespace-nowrap text-gray-600">
-                        {formatDateTime(log.created_at)}
+                        {formatLocalDateTime(log.created_at)}
                       </td>
                       <td className="py-4 pr-4 sm:px-2">
                         <span className="break-all">{log.actor_email || '—'}</span>
                         <span className="block sm:hidden text-xs text-gray-600">
-                          {formatDateTime(log.created_at)}
+                          {formatLocalDateTime(log.created_at)}
                         </span>
                       </td>
                       <td className="py-4 px-2">

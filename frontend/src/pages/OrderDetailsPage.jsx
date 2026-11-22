@@ -7,7 +7,7 @@ import ErrorState from '../components/ErrorState'
 import LoadingSkeleton from '../components/LoadingSkeleton'
 import PageContainer from '../components/PageContainer'
 import StatusBadge from '../components/StatusBadge'
-import { formatDp, formatLocalDate } from '../utils/format'
+import { formatDp, formatLocalDateTime } from '../utils/format'
 import { btnSecondary, cardClass, focusRing } from '../utils/styles'
 
 // 404 ORDER_NOT_FOUND (missing or someone else's order) or 422 (id is not a UUID)
@@ -156,7 +156,7 @@ function OrderDetailsPage() {
           </div>
           <div>
             <h2 className="text-xs text-gray-600">Ordered on</h2>
-            <p className="font-medium">{formatLocalDate(order.created_at)}</p>
+            <p className="font-medium">{formatLocalDateTime(order.created_at)}</p>
           </div>
           <div>
             <h2 className="text-xs text-gray-600">Shipping address</h2>

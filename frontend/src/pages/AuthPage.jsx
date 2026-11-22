@@ -141,7 +141,7 @@ function AuthPage() {
           </form>
 
           <p className="text-sm text-center text-gray-600">
-            {isLogin ? 'Немає акаунта? ' : 'Вже є акаунт? '}
+            {isLogin ? "Don't have an account? " : 'Already have an account? '}
             <button type="button" onClick={toggleMode} className="font-medium text-gray-900 underline">
               {isLogin ? 'Sign up' : 'Log in'}
             </button>
