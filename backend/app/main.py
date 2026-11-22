@@ -12,6 +12,7 @@ from app.routers import (
     health,
     orders,
     products,
+    users,
 )
 
 app = FastAPI()
@@ -34,3 +35,4 @@ app.include_router(analytics.router, prefix="/api/analytics")
 app.include_router(admin_products.router)
 app.include_router(admin_logs.router)
 app.include_router(admin_analytics.router)
+app.include_router(users.router)

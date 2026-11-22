@@ -3,12 +3,9 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
+from app.core.constants import STARTING_BALANCE
 from app.models import User
 from app.repositories import analytics_repository
-
-# Every account starts with this virtual balance (matches the users.virtual_balance default)
-STARTING_BALANCE = 100000
-
 
 # Money as a JSON number rounded to cents, like the other endpoints
 def _money(value) -> float:
@@ -39,7 +36,7 @@ def get_savings(db: Session, user: User, days: int) -> dict:
     return {
         "total_saved": _money(user.total_saved_amount),
         "current_balance": _money(user.virtual_balance),
-        "starting_balance": STARTING_BALANCE,
+        "starting_balance": int(STARTING_BALANCE),
         "orders_count": summary.orders_count,
         "average_order_value": _money(summary.average_order_value),
         "largest_order": _money(summary.largest_order),

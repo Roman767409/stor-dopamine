@@ -32,6 +32,7 @@ def user_to_dict(user: User) -> dict:
         "role": user.role,
         "virtual_balance": float(user.virtual_balance),
         "total_saved_amount": float(user.total_saved_amount),
+        "created_at": user.created_at.isoformat(),
     }
 
 

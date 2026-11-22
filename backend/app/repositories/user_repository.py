@@ -24,3 +24,13 @@ def create(db: Session, email: str, password_hash: str) -> User:
     db.commit()
     db.refresh(user)
     return user
+
+
+# Load the user and lock its row until the transaction ends (no commit here)
+def get_for_update(db: Session, user_id: uuid.UUID) -> User:
+    return db.scalars(
+        select(User)
+        .where(User.id == user_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).one()
