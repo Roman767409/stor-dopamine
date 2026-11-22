@@ -59,6 +59,7 @@ def place_order(
     user_id: uuid.UUID,
     idempotency_key: str,
     request: CreateOrderRequest,
+    request_id: str | None = None,
 ) -> tuple[dict, bool]:
     # Idempotency: fast path for an already processed request
     existing = order_repository.get_by_idempotency_key(db, user_id, idempotency_key)
@@ -134,6 +135,7 @@ def place_order(
             action="ORDER_CREATED",
             entity_type="order",
             entity_id=order.id,
+            request_id=request_id,
             details={
                 "tracking_number": tracking_number,
                 "total_price": float(total),

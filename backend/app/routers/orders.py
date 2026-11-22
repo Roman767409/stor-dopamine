@@ -1,9 +1,10 @@
 import uuid
 
-from fastapi import APIRouter, Depends, Header, Path, Query, Response
+from fastapi import APIRouter, Depends, Header, Path, Query, Request, Response
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
+from app.core.errors import get_request_id
 from app.database import get_db
 from app.models import User
 from app.schemas.orders import (
@@ -21,6 +22,7 @@ router = APIRouter(prefix="/api/orders", tags=["orders"])
 @router.post("", status_code=201)
 def create_order(
     body: CreateOrderRequest,
+    request: Request,
     response: Response,
     idempotency_key: str = Header(
         ..., alias="Idempotency-Key", min_length=8, max_length=64
@@ -29,7 +31,11 @@ def create_order(
     current_user: User = Depends(get_current_user),
 ):
     result, created = order_service.place_order(
-        db, current_user.id, idempotency_key, body
+        db,
+        current_user.id,
+        idempotency_key,
+        body,
+        request_id=get_request_id(request),
     )
     response.status_code = 201 if created else 200
     return result
