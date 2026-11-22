@@ -144,7 +144,15 @@ export function AuthProvider({ children }) {
     setUser((prev) => (prev ? { ...prev, virtual_balance: newBalance } : prev))
   }
 
-  const value = { user, isLoading, register, login, logout, updateBalance }
+  // Reloads the current user from GET /api/auth/me (fresh balance, savings, created_at).
+  // The answer is ignored if the user logged out while the request was in flight.
+  async function refreshUser(signal) {
+    const me = await api.get('/api/auth/me', { signal }).then((response) => response.data)
+    setUser((prev) => (prev && prev.id === me.id ? me : prev))
+    return me
+  }
+
+  const value = { user, isLoading, register, login, logout, updateBalance, refreshUser }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
