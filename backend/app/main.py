@@ -9,6 +9,7 @@ from app.routers import (
     analytics,
     auth,
     categories,
+    chat,
     health,
     orders,
     products,
@@ -36,3 +37,4 @@ app.include_router(admin_products.router)
 app.include_router(admin_logs.router)
 app.include_router(admin_analytics.router)
 app.include_router(users.router)
+app.include_router(chat.router)
