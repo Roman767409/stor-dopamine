@@ -41,6 +41,9 @@ A presentation script is in [docs/DEMO.md](docs/DEMO.md).
 - Savings dashboard: total saved, balance, order statistics, spending by
   category, a 30-day chart and a week-over-week comparison.
 - Balance reset to 100 000 DP on the profile page.
+- **DopaBot** chat assistant (see [below](#dopabot-a-rule-based-chat-assistant)):
+  answers questions about the balance, savings and the latest parcel with the
+  user's real data, and gives tips against impulse buying.
 
 **Administrators (admin role)**
 
@@ -52,9 +55,6 @@ A presentation script is in [docs/DEMO.md](docs/DEMO.md).
 
 **Planned (not implemented)**
 
-- **DopaBot** chat assistant. The chat widget exists in the frontend, but it
-  answers from a fixed set of keyword-based replies and mock data. There is no
-  backend or AI integration yet.
 - Cloud deployment (Vercel, Render, Supabase) as described in the project
   document.
 
@@ -120,7 +120,7 @@ stor_dopamine/
 │   │   ├── services/                   # business logic and transactions
 │   │   └── repositories/               # database queries
 │   ├── alembic/                        # migrations (3 revisions)
-│   ├── tests/                          # pytest suite (61 tests)
+│   ├── tests/                          # pytest suite (144 tests)
 │   ├── seed.py                         # demo categories and products
 │   ├── docker-compose.yml              # PostgreSQL 17 container
 │   ├── requirements.txt
@@ -134,7 +134,7 @@ stor_dopamine/
     │   ├── context/                    # AuthContext, CartContext
     │   ├── pages/                      # shop, checkout, tracking, dashboard, admin…
     │   ├── components/
-    │   └── mocks/                      # mock data used only by the DopaBot widget
+    │   └── mocks/                      # legacy mock data, no longer used by the app
     ├── package.json
     └── vite.config.js
 ```
@@ -236,7 +236,7 @@ pip install -r requirements-dev.txt
 pytest -q
 ```
 
-The suite has 61 tests and runs in about 30 seconds.
+The suite has 144 tests and runs in about a minute.
 
 - It never touches the dev database. `tests/conftest.py` takes
   `DATABASE_URL`, replaces the database name with `dopaminestore_test` (or uses
@@ -254,6 +254,7 @@ The suite has 61 tests and runs in about 30 seconds.
 | `test_orders_tracking.py` | own orders only, `compute_status` boundaries (29/30 s, 599/600 s, 7199/7200 s), tracking after shifting `created_at`, status never goes back |
 | `test_rbac_admin.py` | 401/403/200 on admin endpoints, product create/update/delete audit entries, deactivated product hidden from the catalog, log filters, `INVALID_DATE_RANGE`, analytics keys |
 | `test_audit_immutability.py` | direct `UPDATE`/`DELETE` on `audit_logs` fails; `ORDER_CREATED` is written once per idempotency key |
+| `test_chat.py` | DopaBot: 401/422, intent and language detection with priorities, replies with real balance, savings and latest order, read-only status, 24-hour rule, deterministic tips, suggestions, nothing written to the audit log |
 | `test_balance_reset.py` | reset to 100 000, savings kept, `NOTHING_TO_RESET`, `BALANCE_RESET` audit entry |
 
 ## API
@@ -284,6 +285,7 @@ only. Without a token the API returns 401; with a wrong role it returns 403
 | GET | `/api/orders/track/{tracking_number}` | User | Parcel status and timeline of an own order. 404 `TRACKING_NOT_FOUND` |
 | GET | `/api/analytics/savings` | User | Savings dashboard data; `days` sets the chart window |
 | POST | `/api/users/me/balance/reset` | User | Reset balance to 100 000 DP. 409 `NOTHING_TO_RESET` |
+| POST | `/api/chat` | User | DopaBot rule-based chat: `{"message"}` (1–500 chars after trim) → `{"reply", "intent", "suggestions"}`. 422 for an empty or too long message |
 | GET | `/api/admin/products` | Admin | All products incl. inactive; `q`, `is_active`, pagination |
 | POST | `/api/admin/products` | Admin | Create a product (audited: `PRODUCT_CREATED`) |
 | PATCH | `/api/admin/products/{product_id}` | Admin | Partial update; only changed fields are audited (`PRODUCT_UPDATED`) |
@@ -393,10 +395,31 @@ than the stored one. The thresholds are constants at the top of
 
 ### Test suite with a race test
 
-61 pytest tests run against an isolated, automatically recreated test database
+144 pytest tests run against an isolated, automatically recreated test database
 (see [Tests](#tests)). Besides the happy paths and error codes, the suite
 includes a **concurrency test**. Two threads start a checkout at the same
 moment for the same user, each costing 60 000 DP of the 100 000 balance. The
 test checks that exactly one gets 201 and the other gets
 `INSUFFICIENT_FUNDS`, and that the final balance is 40 000. Other tests
 confirm through real SQL that the audit log cannot be modified.
+
+### DopaBot: a rule-based chat assistant
+
+DopaBot (`POST /api/chat`, `app/services/chat_service.py`) is deliberately
+**not** an AI: it uses no external AI or LLM services and needs no API keys.
+
+- `detect_intent` is a pure function. It matches Ukrainian and English
+  keywords and picks one of the intents `impulse`, `last_order`, `savings`,
+  `balance`, `tips`, `about`, `help`, `thanks` or `greeting` in that priority
+  order, or `unknown` if nothing matches. The reply is in Ukrainian if the
+  message contains Cyrillic, otherwise in English.
+- Replies use the current user's real data: balance (with a reset hint below
+  10 000 DP), savings and order count, and the latest order with its tracking
+  number, total, item count and computed status. Status is computed for
+  display only, so the chat never writes to the database.
+- For impulse urges it asks three reflective questions and suggests the
+  24-hour rule. Tips come from a fixed list, chosen deterministically from the
+  message text.
+- **Privacy:** chat history is not stored on the server, not written to the
+  audit log and messages are not logged. In the browser, the conversation
+  lives only in the widget's state and disappears on page reload.

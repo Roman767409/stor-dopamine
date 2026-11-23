@@ -1,4 +1,4 @@
-# DopamineStore: demo script (7–10 minutes)
+# DopamineStore: demo script (≈ 10 minutes)
 
 This script walks through the whole product for a presentation: the shopper
 journey first, then the admin side, then the engineering guarantees (append-only
@@ -50,7 +50,7 @@ Passwords need at least 8 characters with a letter and a digit. If
 
    `uvicorn --reload` picks up the change automatically. These are the only
    values to change, and **they must be reverted before the test step**
-   (step 13), because the tests check the real thresholds.
+   (step 14), because the tests check the real thresholds.
 
 3. **Create the admin account.** Register `admin@test.com` / `Admin12345` at
    http://localhost:5173/login, log out, then promote it:
@@ -64,9 +64,9 @@ Passwords need at least 8 characters with a letter and a digit. If
 4. Open these in advance:
    - browser tab: http://localhost:5173
    - browser tab: http://127.0.0.1:8000/docs (Swagger, as a backup)
-   - terminal with `psql` for step 12:
+   - terminal with `psql` for step 13:
      `docker exec -it stor-dopamine-db psql -U dopamine -d dopaminestore`
-   - terminal in `backend` with the venv activated for step 13
+   - terminal in `backend` with the venv activated for step 14
 
 ## Script
 
@@ -143,7 +143,28 @@ never goes back. In production the steps are 30 seconds, 10 minutes and
 order statistics, spending by category, a 30-day chart and the comparison of
 the last 7 days with the previous 7 days.
 
-### 8. Balance reset (≈ 30 s)
+### 8. DopaBot chat assistant (≈ 1 min)
+
+**Do:** Open the 💬 button in the bottom-right corner. Click the quick
+buttons **What's my balance?**, **Where is my parcel?** and **Give me a tip**,
+then type `I want to buy a new phone`.
+
+**Expect:**
+
+- The balance reply shows the real balance, e.g. `86 200 DP`.
+- The parcel reply shows the tracking number from step 5, the total, the
+  item count and the current status.
+- A tip against impulse buying (the same question always gets the same tip).
+- For the phone: three reflective questions, the 24-hour rule and a
+  suggestion to put the phone in this simulator's cart instead.
+- Each answer offers new quick buttons. Questions in Ukrainian
+  (`Який мій баланс?`) get Ukrainian answers.
+
+**Say:** "DopaBot is rule-based on purpose: keyword matching and the user's
+own data, with no external AI service. The chat history is not stored
+anywhere: reload the page and it is gone."
+
+### 9. Balance reset (≈ 30 s)
 
 **Do:** Open **Profile → Reset your balance to 100 000 DP?** and confirm.
 
@@ -151,7 +172,7 @@ the last 7 days with the previous 7 days.
 the same. Resetting again is refused because the balance is already at the
 starting amount (`NOTHING_TO_RESET`).
 
-### 9. Admin: product management (≈ 1 min)
+### 10. Admin: product management (≈ 1 min)
 
 **Do:** Log out, log in as `admin@test.com` / `Admin12345` and open
 **Admin panel** in the header menu. In **Products**, add a product (e.g.
@@ -164,7 +185,7 @@ orders keep their reference.
 **Optional:** Show that the demo shopper cannot open `/admin` (the API
 returns 403 `FORBIDDEN` for the client role).
 
-### 10. Admin: audit log (≈ 1 min)
+### 11. Admin: audit log (≈ 1 min)
 
 **Do:** Open **Logs**. Filter by action `PRODUCT_UPDATED`, expand
 **Details**, then filter by actor `demo@test.com`.
@@ -174,7 +195,7 @@ returns 403 `FORBIDDEN` for the client role).
 `ORDER_CREATED` and `BALANCE_RESET`. Each entry has the actor email, the
 entity, JSON details and a request id.
 
-### 11. Admin: analytics (≈ 40 s)
+### 12. Admin: analytics (≈ 40 s)
 
 **Do:** Open **Analytics**.
 
@@ -182,7 +203,7 @@ entity, JSON details and a request id.
 active products, orders by status, top products, top categories and the
 orders volume per day.
 
-### 12. The audit log cannot be changed, even with SQL (≈ 1 min)
+### 13. The audit log cannot be changed, even with SQL (≈ 1 min)
 
 **Do:** In the prepared `psql` terminal:
 
@@ -211,7 +232,7 @@ access to the app's tables."
 
 Exit with `\q`.
 
-### 13. Automated tests (≈ 1 min)
+### 14. Automated tests (≈ 1 min)
 
 **Do:** First **revert the demo thresholds** in
 `backend/app/services/tracking_service.py` back to
@@ -222,7 +243,7 @@ the venv activated:
 pytest -q
 ```
 
-**Expect:** `61 passed` in about 30 seconds.
+**Expect:** `144 passed` in about a minute.
 
 **Say:** "The tests run on a separate database, `dopaminestore_test`, which
 is recreated on every run; the dev data you just saw is never touched. They
@@ -238,4 +259,4 @@ exactly one success and one `INSUFFICIENT_FUNDS`."
 | The catalog is empty | Run `python seed.py` in `backend`. |
 | No **Admin panel** link after the `UPDATE` | Log out and log in again as `admin@test.com`. |
 | The parcel stays in Created | Check that the demo thresholds were saved and uvicorn reloaded. |
-| Tracking tests fail in step 13 | The demo thresholds are still in `tracking_service.py`; revert them. |
+| Tracking tests fail in step 14 | The demo thresholds are still in `tracking_service.py`; revert them. |
