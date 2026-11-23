@@ -1,85 +1,96 @@
-// DopaBot: floating chat assistant with mocked keyword answers (type "error" to see the error state)
+// DopaBot: floating chat assistant backed by POST /api/chat (rule-based, no AI).
+// The conversation lives only in component state and is lost on page reload.
 import { Fragment, useEffect, useRef, useState } from 'react'
+import axios from 'axios'
 import { Link } from 'react-router-dom'
+import api from '../api'
 import { useAuth } from '../context/AuthContext'
-import { mockProducts } from '../mocks/mockData'
-import { formatDp } from '../utils/format'
 import { focusRing } from '../utils/styles'
 
-const WAKE_UP_MS = 1500
-const REPLY_DELAY_MS = 600
+const MAX_LENGTH = 500
+const COUNTER_THRESHOLD = 50
 
-const QUICK_QUESTIONS = [
-  'How does tracking work?',
-  'How do I top up my balance?',
-  'Recommend a product',
-]
+const INITIAL_SUGGESTIONS = ["What's my balance?", 'Where is my parcel?', 'Give me a tip']
 
-const GREETING = "Hi! I'm DopaBot, your shopping assistant. How can I help?"
+const GREETING =
+  "Hi! I'm DopaBot. I'm a simple rule-based helper, not an AI: I can show your DP balance, " +
+  'your savings and the status of your latest parcel, and give tips against impulse buying.'
 
-const ANSWERS = {
-  tracking:
-    'After payment you get a tracking number like DS-1A2B3C4D5E. Open "Track parcel" in the profile menu and enter it to see every step: Created, Processing, In transit, Delivered.',
-  balance:
-    'DP are virtual points, so there is nothing to top up with real money. Every account starts with 100 000 DP, and you can reset your balance on the Profile page.',
-  recommend: 'Here are two products you might like:',
-  hello: 'Hello! Ask me about tracking, your balance or product recommendations.',
-  unknown: 'I did not understand. Try the buttons above.',
+const ERRORS = {
+  auth: 'Please log in again',
+  validation: 'Message must be 1-500 characters',
+  retry: 'Something went wrong, please try again',
 }
 
 const smallButton = `rounded-full px-3 py-1.5 text-xs font-medium bg-gray-200 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-200 ${focusRing}`
 
-function pickRandomProducts(count) {
-  const shuffled = [...mockProducts].sort(() => Math.random() - 0.5)
-  return shuffled.slice(0, count)
+function greetingMessage() {
+  return { id: 0, from: 'bot', text: GREETING, suggestions: INITIAL_SUGGESTIONS }
 }
 
-// Mock "AI": answers by keywords
-function getReply(text) {
-  const lower = text.toLowerCase()
-  if (lower.includes('track')) return { text: ANSWERS.tracking }
-  if (lower.includes('balance') || lower.includes('top up')) return { text: ANSWERS.balance }
-  if (lower.includes('recommend') || lower.includes('product')) {
-    return { text: ANSWERS.recommend, products: pickRandomProducts(2) }
-  }
-  if (/\b(hello|hi|hey)\b/.test(lower)) return { text: ANSWERS.hello }
-  return { text: ANSWERS.unknown }
+// Maps a failed request to one of the ERRORS kinds.
+// 401 reaches here only after api.js failed to refresh the tokens.
+function errorKind(error) {
+  const status = error?.response?.status
+  if (status === 401) return 'auth'
+  if (status === 422) return 'validation'
+  return 'retry'
 }
 
 function ChatWidget() {
-  const { user } = useAuth()
+  const { user, isLoading } = useAuth()
+  const userId = user?.id ?? null
   const [isOpen, setIsOpen] = useState(false)
-  const [hasStarted, setHasStarted] = useState(false)
-  const [isWaking, setIsWaking] = useState(false)
   const [isTyping, setIsTyping] = useState(false)
-  const [hasError, setHasError] = useState(false)
-  const [messages, setMessages] = useState([])
+  // { kind: 'auth' | 'validation' | 'retry', text: message to resend on Retry }
+  const [error, setError] = useState(null)
+  const [messages, setMessages] = useState(() => [greetingMessage()])
   const [draft, setDraft] = useState('')
+  // Last signed-in user the conversation belongs to
+  const [chatOwner, setChatOwner] = useState(userId)
   const nextIdRef = useRef(1)
-  const timersRef = useRef([])
+  // Synchronous double-submit guard: state updates are async, a ref is not
+  const sendingRef = useRef(false)
+  const abortRef = useRef(null)
+  const refocusRef = useRef(false)
   const panelRef = useRef(null)
   const listRef = useRef(null)
+  const inputRef = useRef(null)
+  const toggleRef = useRef(null)
 
-  // Cancel pending bot replies when the widget unmounts
+  // Another user signed in: start a fresh conversation (adjusting state during render).
+  // On logout the history stays visible, but the input is replaced by a login prompt.
+  if (userId && userId !== chatOwner) {
+    setChatOwner(userId)
+    setMessages([greetingMessage()])
+    setError(null)
+    setIsTyping(false)
+    setDraft('')
+  }
+
+  // Drop a reply that belongs to the previous user
   useEffect(() => {
-    const timers = timersRef.current
-    return () => timers.forEach(clearTimeout)
-  }, [])
+    return () => abortRef.current?.abort()
+  }, [userId])
 
   // Keep the newest message in view
   useEffect(() => {
     const list = listRef.current
     if (list) list.scrollTop = list.scrollHeight
-  }, [messages, isTyping, isWaking, hasError, isOpen])
+  }, [messages, isTyping, error, isOpen])
 
   // Move keyboard focus into the window when it opens
   useEffect(() => {
     if (isOpen) panelRef.current?.focus()
   }, [isOpen])
 
-  function later(callback, delay) {
-    timersRef.current.push(setTimeout(callback, delay))
-  }
+  // Give the focus back to the input after a reply (it was disabled while waiting)
+  useEffect(() => {
+    if (!isTyping && refocusRef.current) {
+      refocusRef.current = false
+      inputRef.current?.focus()
+    }
+  }, [isTyping])
 
   function addMessage(message) {
     const id = nextIdRef.current
@@ -87,41 +98,57 @@ function ChatWidget() {
     setMessages((prev) => [...prev, { id, ...message }])
   }
 
-  function openChat() {
-    setIsOpen(true)
-    if (hasStarted) return
-    // First open: the assistant "wakes up" before greeting
-    setHasStarted(true)
-    setIsWaking(true)
-    later(() => {
-      setIsWaking(false)
-      addMessage({ from: 'bot', text: GREETING })
-    }, WAKE_UP_MS)
+  function closeChat() {
+    setIsOpen(false)
+    toggleRef.current?.focus()
   }
 
-  function send(text) {
+  // Sends the text to the API; `isRetry` resends without adding the user bubble again
+  async function send(text, { isRetry = false } = {}) {
     const trimmed = text.trim()
-    if (!trimmed || isTyping || isWaking) return
-    addMessage({ from: 'user', text: trimmed })
-    setDraft('')
+    if (!trimmed || trimmed.length > MAX_LENGTH || !user || sendingRef.current) return
+    sendingRef.current = true
 
-    if (trimmed.toLowerCase().includes('error')) {
-      setHasError(true)
-      return
+    if (!isRetry) {
+      addMessage({ from: 'user', text: trimmed })
+      setDraft('')
     }
-
-    setHasError(false)
+    setError(null)
     setIsTyping(true)
-    later(() => {
-      addMessage({ from: 'bot', ...getReply(trimmed) })
+
+    const controller = new AbortController()
+    abortRef.current = controller
+    try {
+      const { data } = await api.post(
+        '/api/chat',
+        { message: trimmed },
+        { signal: controller.signal }
+      )
+      addMessage({
+        from: 'bot',
+        text: data.reply,
+        suggestions: Array.isArray(data.suggestions) ? data.suggestions.slice(0, 3) : [],
+      })
+    } catch (requestError) {
+      // Cancelled because the user changed or the widget unmounted: nothing to show
+      if (axios.isCancel(requestError)) return
+      setError({ kind: errorKind(requestError), text: trimmed })
+    } finally {
+      if (abortRef.current === controller) abortRef.current = null
+      sendingRef.current = false
+      // Refocus only after a real answer, not after a cancelled request
+      refocusRef.current = !controller.signal.aborted
       setIsTyping(false)
-    }, REPLY_DELAY_MS)
+    }
   }
 
   function handleSubmit(event) {
     event.preventDefault()
     send(draft)
   }
+
+  const lastBotIndex = messages.findLastIndex((message) => message.from === 'bot')
+  const remaining = MAX_LENGTH - draft.length
 
   return (
     <>
@@ -132,7 +159,7 @@ function ChatWidget() {
           aria-label="DopaBot chat"
           tabIndex={-1}
           onKeyDown={(event) => {
-            if (event.key === 'Escape') setIsOpen(false)
+            if (event.key === 'Escape') closeChat()
           }}
           className="fixed z-50 inset-x-2 top-2 bottom-20 sm:inset-auto sm:right-4 sm:bottom-24 sm:w-[360px] sm:h-[520px] flex flex-col overflow-hidden bg-white border border-gray-200 rounded-xl shadow-md outline-none"
         >
@@ -144,142 +171,138 @@ function ChatWidget() {
             <button
               type="button"
               aria-label="Close chat"
-              onClick={() => setIsOpen(false)}
+              onClick={closeChat}
               className={`w-8 h-8 rounded-full hover:bg-gray-100 ${focusRing}`}
             >
               ✕
             </button>
           </div>
 
-          <div ref={listRef} className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
-            {isWaking && (
-              <div role="status" className="flex items-center gap-2 text-sm text-gray-600">
-                <span
-                  className="shrink-0 w-4 h-4 rounded-full border-2 border-gray-300 border-t-gray-900 animate-spin"
-                  aria-hidden="true"
-                />
-                Assistant is waking up…
-              </div>
-            )}
+          <div
+            ref={listRef}
+            aria-live="polite"
+            aria-label="Chat messages"
+            className="flex-1 overflow-y-auto p-4 flex flex-col gap-3"
+          >
+            {messages.map((message, index) => (
+              <Fragment key={message.id}>
+                <p
+                  className={`max-w-[85%] rounded-xl px-3 py-2 text-sm break-words whitespace-pre-line ${
+                    message.from === 'user'
+                      ? 'self-end bg-gray-900 text-white'
+                      : 'self-start bg-gray-200'
+                  }`}
+                >
+                  {message.text}
+                </p>
 
-            <div className="flex flex-col gap-3" aria-live="polite">
-              {messages.map((message, index) => (
-                <Fragment key={message.id}>
-                  <p
-                    className={`max-w-[85%] rounded-xl px-3 py-2 text-sm break-words ${
-                      message.from === 'user'
-                        ? 'self-end bg-gray-900 text-white'
-                        : 'self-start bg-gray-200'
-                    }`}
-                  >
-                    {message.text}
-                  </p>
-
-                  {message.products && (
-                    <div className="self-start w-[85%] flex flex-col gap-2">
-                      {message.products.map((product) => (
-                        <Link
-                          key={product.id}
-                          to={`/product/${product.id}`}
-                          onClick={() => setIsOpen(false)}
-                          className={`flex items-center gap-3 border border-gray-200 rounded-xl p-2 hover:bg-gray-100 ${focusRing}`}
-                        >
-                          <span className="bg-gray-200 rounded-lg w-12 h-12 shrink-0" aria-hidden="true" />
-                          <span className="min-w-0">
-                            <span className="block text-sm font-semibold truncate">
-                              {product.title}
-                            </span>
-                            <span className="block text-xs text-gray-600">
-                              {formatDp(product.price)} DP
-                            </span>
-                          </span>
-                        </Link>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Quick questions go right after the greeting */}
-                  {index === 0 && user && (
-                    <div className="flex flex-wrap gap-2">
-                      {QUICK_QUESTIONS.map((question) => (
-                        <button
-                          key={question}
-                          type="button"
-                          onClick={() => send(question)}
-                          disabled={isTyping}
-                          className={smallButton}
-                        >
-                          {question}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </Fragment>
-              ))}
-            </div>
+                {/* Quick replies only under the latest bot answer */}
+                {index === lastBotIndex && user && message.suggestions?.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {message.suggestions.map((suggestion) => (
+                      <button
+                        key={suggestion}
+                        type="button"
+                        aria-label={`Ask DopaBot: ${suggestion}`}
+                        onClick={() => send(suggestion)}
+                        disabled={isTyping}
+                        className={smallButton}
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </Fragment>
+            ))}
 
             {isTyping && (
-              <p className="self-start bg-gray-200 rounded-xl px-3 py-2 text-sm text-gray-600 animate-pulse">
+              <p
+                role="status"
+                className="self-start bg-gray-200 rounded-xl px-3 py-2 text-sm text-gray-600 animate-pulse"
+              >
                 DopaBot is typing…
               </p>
             )}
 
-            {hasError && (
+            {error && (
               <div
                 role="alert"
                 className="flex flex-col items-start gap-2 rounded-xl border border-red-200 p-3 text-sm text-red-600"
               >
-                <p>Something went wrong. Try again.</p>
-                <button type="button" onClick={() => setHasError(false)} className={smallButton}>
-                  Try again
-                </button>
+                <p>{ERRORS[error.kind]}</p>
+                {error.kind === 'retry' && user && (
+                  <button
+                    type="button"
+                    aria-label="Retry sending the last message"
+                    onClick={() => send(error.text, { isRetry: true })}
+                    disabled={isTyping}
+                    className={smallButton}
+                  >
+                    Retry
+                  </button>
+                )}
               </div>
             )}
           </div>
 
           <div className="border-t border-gray-200 p-3">
             {user ? (
-              <form onSubmit={handleSubmit} className="flex items-center gap-2">
-                <label htmlFor="chat-input" className="sr-only">
-                  Message
-                </label>
-                <input
-                  id="chat-input"
-                  type="text"
-                  autoComplete="off"
-                  placeholder="Type a message…"
-                  value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
-                  disabled={isWaking}
-                  className="flex-1 min-w-0 border border-gray-300 rounded-full px-4 py-2 text-sm outline-none focus:border-gray-900 disabled:opacity-50"
-                />
-                <button
-                  type="submit"
-                  disabled={!draft.trim() || isWaking || isTyping}
-                  className={`shrink-0 bg-gray-900 hover:bg-gray-700 text-white rounded-full px-4 py-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-900 ${focusRing}`}
-                >
-                  Send
-                </button>
+              <form onSubmit={handleSubmit} className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <label htmlFor="chat-input" className="sr-only">
+                    Message
+                  </label>
+                  <input
+                    ref={inputRef}
+                    id="chat-input"
+                    type="text"
+                    autoComplete="off"
+                    placeholder="Type a message…"
+                    maxLength={MAX_LENGTH}
+                    aria-describedby={remaining < COUNTER_THRESHOLD ? 'chat-counter' : undefined}
+                    value={draft}
+                    onChange={(event) => setDraft(event.target.value)}
+                    disabled={isTyping}
+                    className="flex-1 min-w-0 border border-gray-300 rounded-full px-4 py-2 text-sm outline-none focus:border-gray-900 disabled:opacity-50"
+                  />
+                  <button
+                    type="submit"
+                    aria-label="Send message"
+                    disabled={!draft.trim() || isTyping}
+                    className={`shrink-0 bg-gray-900 hover:bg-gray-700 text-white rounded-full px-4 py-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-900 ${focusRing}`}
+                  >
+                    Send
+                  </button>
+                </div>
+                {remaining < COUNTER_THRESHOLD && (
+                  <p id="chat-counter" className="px-4 text-xs text-gray-600">
+                    {remaining} {remaining === 1 ? 'character' : 'characters'} left
+                  </p>
+                )}
               </form>
             ) : (
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm text-gray-600">Log in to use the assistant</p>
-                <Link
-                  to="/login"
-                  onClick={() => setIsOpen(false)}
-                  className={`shrink-0 bg-gray-900 hover:bg-gray-700 text-white rounded-full px-4 py-2 text-sm font-medium ${focusRing}`}
-                >
-                  Log in
-                </Link>
-              </div>
+              !isLoading && (
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm text-gray-600">Log in to chat with DopaBot</p>
+                  <Link
+                    to="/login"
+                    onClick={() => setIsOpen(false)}
+                    className={`shrink-0 bg-gray-900 hover:bg-gray-700 text-white rounded-full px-4 py-2 text-sm font-medium ${focusRing}`}
+                  >
+                    Log in
+                  </Link>
+                </div>
+              )
             )}
           </div>
         </div>
       )}
 
       <button
+        ref={toggleRef}
         type="button"
-        onClick={isOpen ? () => setIsOpen(false) : openChat}
+        onClick={() => setIsOpen((open) => !open)}
         aria-label={isOpen ? 'Close DopaBot chat' : 'Open DopaBot chat'}
         aria-expanded={isOpen}
         className={`fixed bottom-4 right-4 z-50 w-14 h-14 rounded-full bg-gray-900 hover:bg-gray-700 text-white text-2xl shadow-md flex items-center justify-center ${focusRing}`}
