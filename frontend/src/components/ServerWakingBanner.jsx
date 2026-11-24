@@ -1,5 +1,8 @@
 // Notice shown when the free-hosted backend takes long to answer the first request
+import { useTranslation } from 'react-i18next'
+
 function ServerWakingBanner() {
+  const { t } = useTranslation()
   return (
     <div
       role="status"
@@ -9,7 +12,7 @@ function ServerWakingBanner() {
         className="shrink-0 w-5 h-5 rounded-full border-2 border-gray-300 border-t-gray-900 animate-spin"
         aria-hidden="true"
       />
-      <p>Waking up the server… free hosting starts slowly, this can take up to 30 seconds</p>
+      <p>{t('common.serverWaking')}</p>
     </div>
   )
 }

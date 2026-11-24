@@ -1,11 +1,14 @@
 // Gray pulsing placeholders shown while data is loading: "cards" grid or "list" rows
+import { useTranslation } from 'react-i18next'
+
 function LoadingSkeleton({ variant = 'cards', count }) {
+  const { t } = useTranslation()
   const total = count ?? (variant === 'cards' ? 8 : 4)
   const blocks = Array.from({ length: total }, (_, index) => index)
 
   return (
     <div role="status">
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t('common.loading')}</span>
       {variant === 'cards' ? (
         <div
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 animate-pulse"

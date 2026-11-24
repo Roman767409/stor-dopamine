@@ -1,4 +1,5 @@
 // Colored pill with the order status label (different color for each of the 4 statuses)
+import { useTranslation } from 'react-i18next'
 import { getStatusLabel } from '../utils/orderStatus'
 
 const STATUS_COLORS = {
@@ -9,12 +10,13 @@ const STATUS_COLORS = {
 }
 
 function StatusBadge({ status }) {
+  const { t } = useTranslation()
   const colors = STATUS_COLORS[status] ?? 'bg-gray-200 text-gray-800'
   return (
     <span
       className={`inline-block whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium ${colors}`}
     >
-      {getStatusLabel(status)}
+      {getStatusLabel(status, t)}
     </span>
   )
 }

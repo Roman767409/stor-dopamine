@@ -1,22 +1,16 @@
 // Inline SVG bar chart of daily savings (no chart libraries); redraws to the container width
 import { useEffect, useRef, useState } from 'react'
-import { formatDp } from '../utils/format'
+import { useTranslation } from 'react-i18next'
+import { formatDayMonth, formatDp, formatNumber } from '../utils/format'
 
 const HEIGHT = 240
 const PADDING = { top: 12, right: 8, bottom: 32, left: 64 }
 const LABEL_EVERY_DAYS = 7
 
-// "2026-11-11" -> "11 Nov"
-function formatDay(isoDate) {
-  return new Date(`${isoDate}T00:00:00Z`).toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-  })
-}
-
 // label: accessible name of the chart; defaults to the savings dashboard wording
 function SavingsChart({ data, label }) {
+  // useTranslation also re-renders the chart when the language (and number format) changes
+  const { t } = useTranslation()
   const containerRef = useRef(null)
   const [width, setWidth] = useState(0)
 
@@ -46,7 +40,7 @@ function SavingsChart({ data, label }) {
           width={width}
           height={HEIGHT}
           role="img"
-          aria-label={label ?? `Saved DP per day for the last ${data.length} days`}
+          aria-label={label ?? t('dashboard.chartLabel', { count: data.length })}
           className="block"
         >
           {/* Y axis: grid lines and values */}
@@ -68,7 +62,7 @@ function SavingsChart({ data, label }) {
                   textAnchor="end"
                   className="fill-gray-600 text-xs"
                 >
-                  {formatDp(tick)}
+                  {formatNumber(tick)}
                 </text>
               </g>
             )
@@ -89,7 +83,7 @@ function SavingsChart({ data, label }) {
             const barHeight = (day.amount / yMax) * plotHeight
             return (
               <g key={day.date}>
-                <title>{`${formatDay(day.date)}: ${formatDp(day.amount)} DP`}</title>
+                <title>{`${formatDayMonth(day.date)}: ${formatDp(day.amount)}`}</title>
                 <rect x={x} y={PADDING.top} width={slot} height={plotHeight} fill="transparent" />
                 {day.amount > 0 && (
                   <rect
@@ -115,7 +109,7 @@ function SavingsChart({ data, label }) {
                 textAnchor="middle"
                 className="fill-gray-600 text-xs"
               >
-                {formatDay(day.date)}
+                {formatDayMonth(day.date)}
               </text>
             ) : null
           )}
