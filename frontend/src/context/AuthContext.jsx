@@ -42,18 +42,6 @@ function removeLegacyToken() {
   }
 }
 
-// Перетворює помилку axios на зрозумілий текст
-function getErrorMessage(error) {
-  const data = error?.response?.data?.error
-  if (data?.code === 'VALIDATION_ERROR' && data.details?.[0]?.message) {
-    return data.details[0].message
-  }
-  if (data?.message) {
-    return data.message
-  }
-  return 'Something went wrong'
-}
-
 // Токен зі сховища додає інтерцептор; явний токен потрібен одразу після входу,
 // якщо сховище недоступне
 function fetchMe(accessToken) {
@@ -105,24 +93,18 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener('auth:logout', handleForcedLogout)
   }, [])
 
+  // Errors are thrown as they come from axios: the page maps error.code to a translated text
+  // (utils/apiErrors.js), so the server's English message is never shown
   async function login(email, password) {
-    try {
-      const response = await api.post('/api/auth/login', { email, password })
-      saveTokens(response.data)
-      const me = await fetchMe(response.data.access_token)
-      setUser(me)
-      return me
-    } catch (error) {
-      throw new Error(getErrorMessage(error), { cause: error })
-    }
+    const response = await api.post('/api/auth/login', { email, password })
+    saveTokens(response.data)
+    const me = await fetchMe(response.data.access_token)
+    setUser(me)
+    return me
   }
 
   async function register(email, password) {
-    try {
-      await api.post('/api/auth/register', { email, password })
-    } catch (error) {
-      throw new Error(getErrorMessage(error), { cause: error })
-    }
+    await api.post('/api/auth/register', { email, password })
     return login(email, password)
   }
 
