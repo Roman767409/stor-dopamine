@@ -1,12 +1,15 @@
 // Product screen: big image placeholder, details, quantity picker and "Add to cart"
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import api from '../api'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useCart } from '../context/CartContext'
 import EmptyState from '../components/EmptyState'
 import ErrorState from '../components/ErrorState'
+import FavoriteButton from '../components/FavoriteButton'
 import PageContainer from '../components/PageContainer'
+import { getErrorKey } from '../utils/apiErrors'
 import { formatDp } from '../utils/format'
 import { btnPrimary, focusRing } from '../utils/styles'
 
@@ -21,9 +24,10 @@ function clampQuantity(value) {
 
 // Gray pulsing placeholder that repeats the product layout
 function ProductSkeleton() {
+  const { t } = useTranslation()
   return (
     <div role="status">
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t('common.loading')}</span>
       <div
         className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 animate-pulse"
         aria-hidden="true"
@@ -42,6 +46,7 @@ function ProductSkeleton() {
 }
 
 function ProductPage() {
+  const { t } = useTranslation()
   const { id } = useParams()
   const navigate = useNavigate()
   const { user, isLoading: isAuthLoading } = useAuth()
@@ -49,7 +54,7 @@ function ProductPage() {
   const [quantity, setQuantity] = useState('1')
   const [isAdded, setIsAdded] = useState(false)
   const [attempt, setAttempt] = useState(0)
-  // Last server answer together with the key of the request it belongs to
+  // Last server answer together with the key of the request it belongs to (error is a translation key)
   const [result, setResult] = useState({ key: null, product: null, notFound: false, error: null })
 
   const requestKey = `${id}:${attempt}`
@@ -80,9 +85,7 @@ function ProductPage() {
           key: requestKey,
           product: null,
           notFound,
-          error: notFound
-            ? null
-            : error.response?.data?.error?.message || 'Could not load product',
+          error: notFound ? null : getErrorKey(error, 'product.loadError'),
         })
       })
 
@@ -103,9 +106,9 @@ function ProductPage() {
     return (
       <PageContainer>
         <EmptyState
-          title="Product not found"
-          text="It may have been removed or the link is wrong."
-          actionLabel="Go to shop"
+          title={t('product.notFound')}
+          text={t('product.notFoundText')}
+          actionLabel={t('common.goToShop')}
           onAction={() => navigate('/shop')}
         />
       </PageContainer>
@@ -115,7 +118,7 @@ function ProductPage() {
   if (result.error) {
     return (
       <PageContainer>
-        <ErrorState message={result.error} onRetry={() => setAttempt((value) => value + 1)} />
+        <ErrorState message={t(result.error)} onRetry={() => setAttempt((value) => value + 1)} />
       </PageContainer>
     )
   }
@@ -144,7 +147,7 @@ function ProductPage() {
   return (
     <PageContainer>
       <Link to="/shop" className={`text-sm text-gray-600 hover:underline rounded ${focusRing}`}>
-        ← Back to shop
+        {t('product.backToShop')}
       </Link>
 
       <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12">
@@ -156,18 +159,21 @@ function ProductPage() {
 
         <div className="flex flex-col gap-4">
           <p className="text-sm text-gray-600">{product.category}</p>
-          <h1 className="text-3xl font-bold">{product.title}</h1>
-          <p className="text-2xl font-bold">{formatDp(product.price)} DP</p>
+          <div className="flex items-start justify-between gap-4">
+            <h1 className="text-3xl font-bold break-words min-w-0">{product.title}</h1>
+            <FavoriteButton productId={product.id} variant="plain" className="mt-0.5" />
+          </div>
+          <p className="text-2xl font-bold">{formatDp(product.price)}</p>
           <p className="text-gray-600">{product.description}</p>
 
           <div className="flex flex-col gap-2 mt-2">
             <label htmlFor="product-quantity" className="text-xs text-gray-700">
-              Quantity
+              {t('product.quantity')}
             </label>
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                aria-label="Decrease quantity"
+                aria-label={t('product.decrease')}
                 onClick={() => setQuantity(String(clampQuantity(count - 1)))}
                 disabled={count <= MIN_QUANTITY}
                 className={stepButtonClass}
@@ -185,7 +191,7 @@ function ProductPage() {
               />
               <button
                 type="button"
-                aria-label="Increase quantity"
+                aria-label={t('product.increase')}
                 onClick={() => setQuantity(String(clampQuantity(count + 1)))}
                 disabled={count >= MAX_QUANTITY}
                 className={stepButtonClass}
@@ -201,10 +207,10 @@ function ProductPage() {
             disabled={isAuthLoading}
             className={`mt-2 w-full sm:w-auto sm:self-start ${btnPrimary}`}
           >
-            Add to cart
+            {t('common.addToCart')}
           </button>
           <p role="status" className="text-sm font-medium text-green-700 min-h-5">
-            {isAdded ? 'Added to cart ✓' : ''}
+            {isAdded ? t('product.addedToCart') : ''}
           </p>
         </div>
       </div>

@@ -1,15 +1,14 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import api from '../api'
-import { Link, useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
-import { useCart } from '../context/CartContext'
 import EmptyState from '../components/EmptyState'
 import ErrorState from '../components/ErrorState'
 import LoadingSkeleton from '../components/LoadingSkeleton'
 import PageContainer from '../components/PageContainer'
+import ProductCard from '../components/ProductCard'
 import ServerWakingBanner from '../components/ServerWakingBanner'
-import { formatDp } from '../utils/format'
-import { btnSmall, focusRing, inputClass, labelClass } from '../utils/styles'
+import { getErrorKey } from '../utils/apiErrors'
+import { btnSmall, inputClass, labelClass } from '../utils/styles'
 
 const PAGE_SIZE = 12
 // Після цього часу очікування показуємо банер «сервер прокидається»
@@ -17,59 +16,14 @@ const SLOW_REQUEST_MS = 3000
 // Затримка перед відправкою пошукового запиту
 const SEARCH_DEBOUNCE_MS = 400
 
+// `key` is the translation key of the label
 const SORT_OPTIONS = [
-  { value: 'title_asc', label: 'Name A–Z' },
-  { value: 'price_asc', label: 'Price low→high' },
-  { value: 'price_desc', label: 'Price high→low' },
+  { value: 'title_asc', key: 'shop.sortNameAsc' },
+  { value: 'price_asc', key: 'shop.sortPriceAsc' },
+  { value: 'price_desc', key: 'shop.sortPriceDesc' },
 ]
 
 const EMPTY_FILTERS = { search: '', category: '', minPrice: '', maxPrice: '', sort: 'title_asc' }
-
-function ProductCard({ product }) {
-  const { addToCart } = useCart()
-  const { user, isLoading } = useAuth()
-  const navigate = useNavigate()
-  const [isAdded, setIsAdded] = useState(false)
-
-  // Через 1,5 с після натискання повертаємо текст кнопки назад
-  useEffect(() => {
-    if (!isAdded) return
-    const timer = setTimeout(() => setIsAdded(false), 1500)
-    return () => clearTimeout(timer)
-  }, [isAdded])
-
-  function handleAdd() {
-    // Гість не має кошика — відправляємо його увійти
-    if (!user) {
-      navigate('/login')
-      return
-    }
-    addToCart(product)
-    setIsAdded(true)
-  }
-
-  return (
-    <div className="flex flex-col gap-2">
-      <Link
-        to={`/product/${product.id}`}
-        className={`group flex flex-col gap-2 rounded-xl ${focusRing}`}
-      >
-        <div className="bg-gray-200 rounded-xl aspect-square w-full" />
-        <h2 className="font-semibold group-hover:underline">{product.title}</h2>
-        <p className="text-sm text-gray-600">{product.category}</p>
-        <p className="font-bold">{formatDp(product.price)} DP</p>
-      </Link>
-      <button
-        type="button"
-        onClick={handleAdd}
-        disabled={isLoading}
-        className={`mt-auto bg-gray-200 hover:bg-gray-300 rounded-full px-6 py-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-200 ${focusRing}`}
-      >
-        {isAdded ? 'Added ✓' : 'Add to cart'}
-      </button>
-    </div>
-  )
-}
 
 // Збирає параметри запиту, пропускаючи порожні значення
 function buildParams(filters, q, page) {
@@ -82,12 +36,13 @@ function buildParams(filters, q, page) {
 }
 
 function ShopPage() {
+  const { t } = useTranslation()
   const [filters, setFilters] = useState(EMPTY_FILTERS)
   // Пошуковий рядок, який реально пішов у запит (оновлюється із затримкою)
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(1)
   const [attempt, setAttempt] = useState(0)
-  // Остання відповідь сервера разом із ключем запиту, якому вона належить
+  // Остання відповідь сервера разом із ключем запиту, якому вона належить (error — ключ перекладу)
   const [result, setResult] = useState({ key: null, items: [], total: 0, error: null })
   const [slowKey, setSlowKey] = useState(null)
   // Categories for the filter; stays empty (only "All") if the request fails
@@ -147,7 +102,7 @@ function ShopPage() {
           key: requestKey,
           items: [],
           total: 0,
-          error: error.response?.data?.error?.message || 'Could not load products',
+          error: getErrorKey(error, 'shop.loadError'),
         })
       })
 
@@ -180,17 +135,17 @@ function ShopPage() {
   }
 
   return (
-    <PageContainer title="Shop">
+    <PageContainer title={t('shop.title')}>
       {/* Рядок керування: пошук, категорія, ціна, сортування */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-4">
         <div className="col-span-2 flex flex-col gap-1">
           <label htmlFor="shop-search" className={labelClass}>
-            Search
+            {t('common.search')}
           </label>
           <input
             id="shop-search"
             type="search"
-            placeholder="Product name"
+            placeholder={t('shop.searchPlaceholder')}
             maxLength={100}
             value={filters.search}
             onChange={(event) => updateFilter('search', event.target.value)}
@@ -199,7 +154,7 @@ function ShopPage() {
         </div>
         <div className="flex flex-col gap-1">
           <label htmlFor="shop-category" className={labelClass}>
-            Category
+            {t('common.category')}
           </label>
           <select
             id="shop-category"
@@ -207,7 +162,7 @@ function ShopPage() {
             onChange={(event) => updateFilter('category', event.target.value)}
             className={inputClass}
           >
-            <option value="">All</option>
+            <option value="">{t('shop.all')}</option>
             {categories.map((category) => (
               <option key={category.slug} value={category.slug}>
                 {category.name} ({category.products_count})
@@ -217,7 +172,7 @@ function ShopPage() {
         </div>
         <div className="flex flex-col gap-1">
           <label htmlFor="shop-min" className={labelClass}>
-            Min price, DP
+            {t('shop.minPrice')}
           </label>
           <input
             id="shop-min"
@@ -232,14 +187,14 @@ function ShopPage() {
         </div>
         <div className="flex flex-col gap-1">
           <label htmlFor="shop-max" className={labelClass}>
-            Max price, DP
+            {t('shop.maxPrice')}
           </label>
           <input
             id="shop-max"
             type="number"
             min="0"
             inputMode="numeric"
-            placeholder="Any"
+            placeholder={t('shop.maxPlaceholder')}
             value={filters.maxPrice}
             onChange={(event) => updateFilter('maxPrice', event.target.value)}
             className={inputClass}
@@ -247,7 +202,7 @@ function ShopPage() {
         </div>
         <div className="flex flex-col gap-1">
           <label htmlFor="shop-sort" className={labelClass}>
-            Sort by
+            {t('shop.sortBy')}
           </label>
           <select
             id="shop-sort"
@@ -257,7 +212,7 @@ function ShopPage() {
           >
             {SORT_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
-                {option.label}
+                {t(option.key)}
               </option>
             ))}
           </select>
@@ -271,19 +226,19 @@ function ShopPage() {
         </>
       )}
 
-      {!isLoading && error && <ErrorState message={error} onRetry={handleRetry} />}
+      {!isLoading && error && <ErrorState message={t(error)} onRetry={handleRetry} />}
 
       {!isLoading && !error && (
         <>
           <p className="text-sm text-gray-600 mb-8" aria-live="polite">
-            {total} {total === 1 ? 'product' : 'products'}
+            {t('common.productsCount', { count: total })}
           </p>
 
           {products.length === 0 ? (
             <EmptyState
-              title="Nothing found"
-              text="Try another name, category or price range."
-              actionLabel="Reset filters"
+              title={t('shop.nothingFound')}
+              text={t('shop.nothingFoundText')}
+              actionLabel={t('common.resetFilters')}
               onAction={resetFilters}
             />
           ) : (
@@ -295,7 +250,7 @@ function ShopPage() {
               </div>
 
               <nav
-                aria-label="Pagination"
+                aria-label={t('common.pagination')}
                 className="mt-10 flex items-center justify-center gap-4"
               >
                 <button
@@ -304,10 +259,10 @@ function ShopPage() {
                   disabled={page <= 1}
                   className={btnSmall}
                 >
-                  Previous
+                  {t('common.previous')}
                 </button>
                 <span className="text-sm font-medium">
-                  Page {page} of {totalPages}
+                  {t('common.pageOf', { page, total: totalPages })}
                 </span>
                 <button
                   type="button"
@@ -315,7 +270,7 @@ function ShopPage() {
                   disabled={page >= totalPages}
                   className={btnSmall}
                 >
-                  Next
+                  {t('common.next')}
                 </button>
               </nav>
             </>
