@@ -1,11 +1,13 @@
 // Checkout screen: shipping form, test card form (client-side only) and order summary; places the order via POST /api/orders
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import api from '../api'
 import { useAuth } from '../context/AuthContext'
 import { useCart } from '../context/CartContext'
 import FormField from '../components/FormField'
 import PageContainer from '../components/PageContainer'
+import { getErrorKey } from '../utils/apiErrors'
 import { formatDp } from '../utils/format'
 import { btnPrimary, cardClass } from '../utils/styles'
 
@@ -20,16 +22,19 @@ const EMPTY_FORM = {
   cvc: '',
 }
 
+// Translation keys of the "field is empty" errors
 const REQUIRED_MESSAGES = {
-  fullName: 'Enter your full name',
-  address: 'Enter your address',
-  city: 'Enter your city',
-  postalCode: 'Enter your postal code',
-  country: 'Enter your country',
-  cardNumber: 'Enter the card number',
-  expiry: 'Enter the expiry date',
-  cvc: 'Enter the CVC',
+  fullName: 'checkout.errors.fullNameRequired',
+  address: 'checkout.errors.addressRequired',
+  city: 'checkout.errors.cityRequired',
+  postalCode: 'checkout.errors.postalCodeRequired',
+  country: 'checkout.errors.countryRequired',
+  cardNumber: 'checkout.errors.cardNumberRequired',
+  expiry: 'checkout.errors.expiryRequired',
+  cvc: 'checkout.errors.cvcRequired',
 }
+
+const TEST_CARD = '4242 4242 4242 4242'
 
 // "4242424242424242" -> "4242 4242 4242 4242"
 function formatCardNumber(value) {
@@ -57,6 +62,7 @@ function passesLuhn(digits) {
   return total % 10 === 0
 }
 
+// Returns { field: translationKey } for every invalid field
 function validate(form, now) {
   const errors = {}
 
@@ -67,16 +73,16 @@ function validate(form, now) {
   if (!errors.cardNumber) {
     const digits = form.cardNumber.replace(/\D/g, '')
     if (digits.length !== 16) {
-      errors.cardNumber = 'Card number must have 16 digits'
+      errors.cardNumber = 'checkout.errors.cardNumberLength'
     } else if (!passesLuhn(digits)) {
-      errors.cardNumber = 'Invalid card number'
+      errors.cardNumber = 'checkout.errors.cardNumberInvalid'
     }
   }
 
   if (!errors.expiry) {
     const match = /^(0[1-9]|1[0-2])\/(\d{2})$/.exec(form.expiry)
     if (!match) {
-      errors.expiry = 'Use the MM/YY format'
+      errors.expiry = 'checkout.errors.expiryFormat'
     } else {
       const month = Number(match[1])
       const year = 2000 + Number(match[2])
@@ -84,13 +90,13 @@ function validate(form, now) {
       const currentMonth = now.getMonth() + 1
       // The card works until the end of its expiry month
       if (year < currentYear || (year === currentYear && month < currentMonth)) {
-        errors.expiry = 'The card has expired'
+        errors.expiry = 'checkout.errors.cardExpired'
       }
     }
   }
 
   if (!errors.cvc && !/^\d{3}$/.test(form.cvc)) {
-    errors.cvc = 'CVC must be 3 digits'
+    errors.cvc = 'checkout.errors.cvcFormat'
   }
 
   return errors
@@ -103,17 +109,8 @@ function cartSignature(items) {
   )
 }
 
-// Maps an API error to a message shown above the pay button
-function getOrderErrorMessage(error) {
-  const data = error?.response?.data?.error
-  if (data?.code === 'INSUFFICIENT_FUNDS') return 'Not enough Dopamine Points'
-  if (data?.code === 'PRODUCT_UNAVAILABLE') {
-    return 'One of the products is no longer available. Please update your cart'
-  }
-  return data?.message || 'Something went wrong, please try again'
-}
-
 function CheckoutPage() {
+  const { t } = useTranslation()
   const { user, updateBalance } = useAuth()
   const { items, totalPrice, clearCart } = useCart()
   const navigate = useNavigate()
@@ -121,6 +118,7 @@ function CheckoutPage() {
   const [errors, setErrors] = useState({})
   const [wasSubmitted, setWasSubmitted] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
+  // Translation key of the failed order request ('' when there is none)
   const [submitError, setSubmitError] = useState('')
   // Idempotency key is reused for retries of the same cart and replaced when the cart changes
   const idempotencyKeyRef = useRef(null)
@@ -219,7 +217,7 @@ function CheckoutPage() {
     } catch (error) {
       // Cart is kept; the same key will be reused if the cart stays the same
       if (isMountedRef.current) {
-        setSubmitError(getOrderErrorMessage(error))
+        setSubmitError(getErrorKey(error))
         setIsProcessing(false)
       }
     } finally {
@@ -231,46 +229,46 @@ function CheckoutPage() {
     return {
       id: `checkout-${name}`,
       value: form[name],
-      error: errors[name],
+      error: errors[name] ? t(errors[name]) : undefined,
       disabled: isProcessing,
       onChange: (event) => updateField(name, event.target.value),
     }
   }
 
   return (
-    <PageContainer title="Checkout">
+    <PageContainer title={t('checkout.title')}>
       <div
         role="note"
         className="mb-8 rounded-xl border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm font-medium text-yellow-900"
       >
-        ⚠ This is a simulation. Use test card numbers only.
+        {t('checkout.simulationNote')}
       </div>
 
       <form onSubmit={handleSubmit} noValidate className="grid grid-cols-1 lg:grid-cols-3 gap-10">
         <div className="lg:col-span-2 flex flex-col gap-10">
           <section>
-            <h2 className="text-xl font-bold mb-6">Shipping address</h2>
+            <h2 className="text-xl font-bold mb-6">{t('checkout.shippingAddress')}</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <FormField
-                label="Full name"
+                label={t('checkout.fullName')}
                 autoComplete="name"
                 className="sm:col-span-2"
                 {...fieldProps('fullName')}
               />
               <FormField
-                label="Address"
+                label={t('checkout.address')}
                 autoComplete="street-address"
                 className="sm:col-span-2"
                 {...fieldProps('address')}
               />
-              <FormField label="City" autoComplete="address-level2" {...fieldProps('city')} />
+              <FormField label={t('checkout.city')} autoComplete="address-level2" {...fieldProps('city')} />
               <FormField
-                label="Postal code"
+                label={t('checkout.postalCode')}
                 autoComplete="postal-code"
                 {...fieldProps('postalCode')}
               />
               <FormField
-                label="Country"
+                label={t('checkout.country')}
                 autoComplete="country-name"
                 className="sm:col-span-2"
                 {...fieldProps('country')}
@@ -279,30 +277,30 @@ function CheckoutPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-bold mb-2">Test card</h2>
+            <h2 className="text-xl font-bold mb-2">{t('checkout.testCard')}</h2>
             <p className="text-xs text-gray-700 mb-6">
-              Example: 4242 4242 4242 4242, any future date, any 3 digits.
+              {t('checkout.testCardHint', { card: TEST_CARD })}
             </p>
             <div className="grid grid-cols-2 gap-6">
               <FormField
-                label="Card number"
+                label={t('checkout.cardNumber')}
                 inputMode="numeric"
                 autoComplete="off"
-                placeholder="4242 4242 4242 4242"
+                placeholder={TEST_CARD}
                 className="col-span-2"
                 {...fieldProps('cardNumber')}
                 onChange={(event) => updateField('cardNumber', formatCardNumber(event.target.value))}
               />
               <FormField
-                label="Expiry (MM/YY)"
+                label={t('checkout.expiry')}
                 inputMode="numeric"
                 autoComplete="off"
-                placeholder="MM/YY"
+                placeholder={t('checkout.expiryPlaceholder')}
                 {...fieldProps('expiry')}
                 onChange={(event) => updateField('expiry', formatExpiry(event.target.value))}
               />
               <FormField
-                label="CVC"
+                label={t('checkout.cvc')}
                 inputMode="numeric"
                 autoComplete="off"
                 placeholder="123"
@@ -316,10 +314,10 @@ function CheckoutPage() {
         </div>
 
         <aside className={`${cardClass} flex flex-col gap-3 self-start lg:sticky lg:top-6`}>
-          <h2 className="text-xl font-bold">Order summary</h2>
+          <h2 className="text-xl font-bold">{t('checkout.orderSummary')}</h2>
 
           {isEmpty ? (
-            <p className="text-sm text-gray-600">Your cart is empty</p>
+            <p className="text-sm text-gray-600">{t('cart.empty')}</p>
           ) : (
             <ul className="flex flex-col gap-2 text-sm">
               {items.map((item) => (
@@ -328,7 +326,7 @@ function CheckoutPage() {
                     {item.title} × {item.quantity}
                   </span>
                   <span className="whitespace-nowrap">
-                    {formatDp(item.price * item.quantity)} DP
+                    {formatDp(item.price * item.quantity)}
                   </span>
                 </li>
               ))}
@@ -338,27 +336,27 @@ function CheckoutPage() {
           <hr className="border-gray-200 my-1" />
 
           <div className="flex justify-between gap-4">
-            <span className="text-gray-600">Total</span>
-            <span className="font-bold whitespace-nowrap">{formatDp(totalPrice)} DP</span>
+            <span className="text-gray-600">{t('common.total')}</span>
+            <span className="font-bold whitespace-nowrap">{formatDp(totalPrice)}</span>
           </div>
           <div className="flex justify-between gap-4">
-            <span className="text-gray-600">Your balance</span>
-            <span className="font-medium whitespace-nowrap">{formatDp(balance)} DP</span>
+            <span className="text-gray-600">{t('common.yourBalance')}</span>
+            <span className="font-medium whitespace-nowrap">{formatDp(balance)}</span>
           </div>
           <div className="flex justify-between gap-4">
-            <span className="text-gray-600">Balance after payment</span>
+            <span className="text-gray-600">{t('checkout.balanceAfter')}</span>
             <span
               className={`font-medium whitespace-nowrap ${notEnoughDp ? 'text-red-600' : ''}`}
             >
-              {formatDp(balance - totalPrice)} DP
+              {formatDp(balance - totalPrice)}
             </span>
           </div>
 
-          {notEnoughDp && <p className="text-red-600 font-medium">Not enough DP</p>}
+          {notEnoughDp && <p className="text-red-600 font-medium">{t('common.notEnoughDp')}</p>}
 
           {submitError && (
             <p role="alert" className="text-red-600 font-medium">
-              {submitError}
+              {t(submitError)}
             </p>
           )}
 
@@ -368,7 +366,7 @@ function CheckoutPage() {
             aria-busy={isProcessing}
             className={`mt-2 w-full ${btnPrimary}`}
           >
-            {isProcessing ? 'Processing…' : `Pay ${formatDp(totalPrice)} DP`}
+            {isProcessing ? t('checkout.processing') : t('checkout.pay', { amount: formatDp(totalPrice) })}
           </button>
         </aside>
       </form>

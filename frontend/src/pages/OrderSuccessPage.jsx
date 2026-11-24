@@ -1,10 +1,12 @@
 // Order success screen: animated check mark, tracking number, total and new balance
+import { useTranslation } from 'react-i18next'
 import { Link, Navigate, useLocation } from 'react-router-dom'
 import PageContainer from '../components/PageContainer'
 import { formatDp } from '../utils/format'
 import { btnPrimary, btnSecondary, cardClass } from '../utils/styles'
 
 function OrderSuccessPage() {
+  const { t } = useTranslation()
   const location = useLocation()
   const order = location.state?.order
   const newBalance = location.state?.newBalance
@@ -34,21 +36,21 @@ function OrderSuccessPage() {
           </svg>
         </div>
 
-        <h1 className="text-3xl font-bold">Order created</h1>
+        <h1 className="text-3xl font-bold">{t('orders.success.title')}</h1>
 
         <dl className={`w-full ${cardClass} flex flex-col gap-3 text-left`}>
           <div className="flex justify-between gap-4">
-            <dt className="text-gray-600">Tracking number</dt>
+            <dt className="text-gray-600">{t('common.trackingNumber')}</dt>
             <dd className="font-semibold break-all text-right">{order.tracking_number}</dd>
           </div>
           <div className="flex justify-between gap-4">
-            <dt className="text-gray-600">Total</dt>
-            <dd className="font-bold whitespace-nowrap">{formatDp(order.total_price)} DP</dd>
+            <dt className="text-gray-600">{t('common.total')}</dt>
+            <dd className="font-bold whitespace-nowrap">{formatDp(order.total_price)}</dd>
           </div>
           {newBalance !== undefined && (
             <div className="flex justify-between gap-4">
-              <dt className="text-gray-600">New balance</dt>
-              <dd className="font-medium whitespace-nowrap">{formatDp(newBalance)} DP</dd>
+              <dt className="text-gray-600">{t('orders.success.newBalance')}</dt>
+              <dd className="font-medium whitespace-nowrap">{formatDp(newBalance)}</dd>
             </div>
           )}
         </dl>
@@ -59,10 +61,10 @@ function OrderSuccessPage() {
             state={{ order }}
             className={`flex-1 text-center ${btnPrimary}`}
           >
-            Track parcel
+            {t('common.trackParcel')}
           </Link>
           <Link to="/shop" className={`flex-1 text-center ${btnSecondary}`}>
-            Continue shopping
+            {t('orders.success.continueShopping')}
           </Link>
         </div>
       </div>

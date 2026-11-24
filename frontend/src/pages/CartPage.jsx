@@ -1,16 +1,14 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useCart } from '../context/CartContext'
-
-// 95500 -> "95 500"
-function formatDp(amount) {
-  return String(amount).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
-}
+import { formatDp, formatNumber } from '../utils/format'
 
 function CartItem({ item }) {
+  const { t } = useTranslation()
   const { removeFromCart, setQuantity } = useCart()
-  // Текст у полі, поки користувач друкує (може бути тимчасово порожнім)
+  // Text in the field while the user types (may be empty for a moment)
   const [draft, setDraft] = useState(String(item.quantity))
 
   function handleChange(event) {
@@ -22,7 +20,7 @@ function CartItem({ item }) {
     }
   }
 
-  // Коли поле втрачає фокус, показуємо справжню кількість із кошика
+  // When the field loses focus, show the real quantity from the cart
   function handleBlur() {
     const number = Number(draft)
     if (draft !== '' && !Number.isNaN(number)) {
@@ -39,7 +37,7 @@ function CartItem({ item }) {
 
       <div className="flex-1 min-w-0">
         <h2 className="font-semibold truncate">{item.title}</h2>
-        <p className="text-sm text-gray-600">{item.price} DP</p>
+        <p className="text-sm text-gray-600">{formatDp(item.price)}</p>
       </div>
 
       <input
@@ -49,7 +47,7 @@ function CartItem({ item }) {
         value={draft}
         onChange={handleChange}
         onBlur={handleBlur}
-        aria-label={`Quantity of ${item.title}`}
+        aria-label={t('cart.quantityOf', { title: item.title })}
         className="w-16 border border-gray-300 rounded-lg px-2 py-1 text-center"
       />
 
@@ -58,22 +56,23 @@ function CartItem({ item }) {
         onClick={() => removeFromCart(item.id)}
         className="bg-gray-200 hover:bg-gray-300 rounded-full px-4 py-2 text-sm font-medium"
       >
-        Remove
+        {t('cart.remove')}
       </button>
     </li>
   )
 }
 
 function CartPage() {
+  const { t } = useTranslation()
   const { items, totalItems, totalPrice } = useCart()
   const { user, isLoading } = useAuth()
   const navigate = useNavigate()
 
-  // Поки перевіряється сесія, ще невідомо, гість це чи користувач
+  // While the session is checked it is not known yet whether this is a guest or a user
   if (isLoading) {
     return (
       <main className="max-w-[1100px] mx-auto px-6 py-10">
-        <h1 className="text-3xl font-bold mb-8">Cart</h1>
+        <h1 className="text-3xl font-bold mb-8">{t('cart.title')}</h1>
       </main>
     )
   }
@@ -81,13 +80,13 @@ function CartPage() {
   if (!user) {
     return (
       <main className="max-w-[1100px] mx-auto px-6 py-10">
-        <h1 className="text-3xl font-bold mb-8">Cart</h1>
-        <p className="mb-4">Log in to use your cart</p>
+        <h1 className="text-3xl font-bold mb-8">{t('cart.title')}</h1>
+        <p className="mb-4">{t('cart.loginPrompt')}</p>
         <Link
           to="/login"
           className="inline-block bg-gray-200 hover:bg-gray-300 rounded-full px-6 py-2 font-medium"
         >
-          Log in
+          {t('common.logIn')}
         </Link>
       </main>
     )
@@ -96,13 +95,13 @@ function CartPage() {
   if (items.length === 0) {
     return (
       <main className="max-w-[1100px] mx-auto px-6 py-10">
-        <h1 className="text-3xl font-bold mb-8">Cart</h1>
-        <p className="mb-4">Your cart is empty</p>
+        <h1 className="text-3xl font-bold mb-8">{t('cart.title')}</h1>
+        <p className="mb-4">{t('cart.empty')}</p>
         <Link
           to="/shop"
           className="inline-block bg-gray-200 hover:bg-gray-300 rounded-full px-6 py-2 font-medium"
         >
-          Go to shop
+          {t('common.goToShop')}
         </Link>
       </main>
     )
@@ -113,7 +112,7 @@ function CartPage() {
 
   return (
     <main className="max-w-[1100px] mx-auto px-6 py-10">
-      <h1 className="text-3xl font-bold mb-8">Cart</h1>
+      <h1 className="text-3xl font-bold mb-8">{t('cart.title')}</h1>
 
       <ul>
         {items.map((item) => (
@@ -122,28 +121,28 @@ function CartPage() {
       </ul>
 
       <div className="mt-8 ml-auto max-w-sm flex flex-col gap-3">
-        <div className="flex justify-between">
-          <span className="text-gray-600">Items</span>
-          <span className="font-medium">{totalItems}</span>
+        <div className="flex justify-between gap-4">
+          <span className="text-gray-600">{t('cart.items')}</span>
+          <span className="font-medium">{formatNumber(totalItems)}</span>
         </div>
-        <div className="flex justify-between">
-          <span className="text-gray-600">Total</span>
-          <span className="font-bold">{totalPrice} DP</span>
+        <div className="flex justify-between gap-4">
+          <span className="text-gray-600">{t('common.total')}</span>
+          <span className="font-bold whitespace-nowrap">{formatDp(totalPrice)}</span>
         </div>
-        <div className="flex justify-between">
-          <span className="text-gray-600">Your balance</span>
+        <div className="flex justify-between gap-4">
+          <span className="text-gray-600">{t('common.yourBalance')}</span>
           {isLoading ? (
             <span className="text-gray-400">…</span>
           ) : user ? (
-            <span className="font-medium whitespace-nowrap">{formatDp(user.virtual_balance)} DP</span>
+            <span className="font-medium whitespace-nowrap">{formatDp(user.virtual_balance)}</span>
           ) : (
             <Link to="/login" className="font-medium underline">
-              Log in to see your balance
+              {t('cart.loginToSeeBalance')}
             </Link>
           )}
         </div>
 
-        {notEnoughDp && <p className="text-red-600 font-medium">Not enough DP</p>}
+        {notEnoughDp && <p className="text-red-600 font-medium">{t('common.notEnoughDp')}</p>}
 
         <button
           type="button"
@@ -151,7 +150,7 @@ function CartPage() {
           onClick={() => navigate('/checkout')}
           className="bg-gray-200 hover:bg-gray-300 rounded-full px-6 py-3 font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-200"
         >
-          Checkout
+          {t('cart.checkout')}
         </button>
       </div>
     </main>
