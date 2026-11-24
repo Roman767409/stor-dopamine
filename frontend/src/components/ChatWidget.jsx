@@ -1,7 +1,9 @@
 // DopaBot: floating chat assistant backed by POST /api/chat (rule-based, no AI).
 // The conversation lives only in component state and is lost on page reload.
+// Interface texts follow the UI language; the bot's replies come from the backend as they are.
 import { Fragment, useEffect, useRef, useState } from 'react'
 import axios from 'axios'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import api from '../api'
 import { useAuth } from '../context/AuthContext'
@@ -10,25 +12,32 @@ import { focusRing } from '../utils/styles'
 const MAX_LENGTH = 500
 const COUNTER_THRESHOLD = 50
 
-const INITIAL_SUGGESTIONS = ["What's my balance?", 'Where is my parcel?', 'Give me a tip']
+// Starting quick replies. The button shows the label in the UI language, but the message
+// sent to the bot is the canonical English phrase, because the backend recognizes intents
+// only in English and Ukrainian and answers in Ukrainian only for Cyrillic text.
+// TEMPORARY LIMITATION: Polish support for the bot will be added separately; until then
+// these buttons always send English and get an English reply.
+const INITIAL_SUGGESTIONS = [
+  { labelKey: 'chat.suggestions.balance', message: "What's my balance?" },
+  { labelKey: 'chat.suggestions.parcel', message: 'Where is my parcel?' },
+  { labelKey: 'chat.suggestions.tip', message: 'Give me a tip' },
+]
 
-const GREETING =
-  "Hi! I'm DopaBot. I'm a simple rule-based helper, not an AI: I can show your DP balance, " +
-  'your savings and the status of your latest parcel, and give tips against impulse buying.'
-
-const ERRORS = {
-  auth: 'Please log in again',
-  validation: 'Message must be 1-500 characters',
-  retry: 'Something went wrong, please try again',
+// Translation keys of the error kinds
+const ERROR_KEYS = {
+  auth: 'chat.errors.auth',
+  validation: 'chat.errors.validation',
+  retry: 'chat.errors.retry',
 }
 
 const smallButton = `rounded-full px-3 py-1.5 text-xs font-medium bg-gray-200 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-200 ${focusRing}`
 
+// The greeting text is not stored: it is translated on every render, so it follows the language
 function greetingMessage() {
-  return { id: 0, from: 'bot', text: GREETING, suggestions: INITIAL_SUGGESTIONS }
+  return { id: 0, from: 'bot', isGreeting: true, suggestions: INITIAL_SUGGESTIONS }
 }
 
-// Maps a failed request to one of the ERRORS kinds.
+// Maps a failed request to one of the error kinds.
 // 401 reaches here only after api.js failed to refresh the tokens.
 function errorKind(error) {
   const status = error?.response?.status
@@ -38,6 +47,7 @@ function errorKind(error) {
 }
 
 function ChatWidget() {
+  const { t } = useTranslation()
   const { user, isLoading } = useAuth()
   const userId = user?.id ?? null
   const [isOpen, setIsOpen] = useState(false)
@@ -103,14 +113,15 @@ function ChatWidget() {
     toggleRef.current?.focus()
   }
 
-  // Sends the text to the API; `isRetry` resends without adding the user bubble again
-  async function send(text, { isRetry = false } = {}) {
+  // Sends the text to the API; `isRetry` resends without adding the user bubble again.
+  // `display` is the bubble text when it differs from what is sent (translated quick reply).
+  async function send(text, { isRetry = false, display } = {}) {
     const trimmed = text.trim()
     if (!trimmed || trimmed.length > MAX_LENGTH || !user || sendingRef.current) return
     sendingRef.current = true
 
     if (!isRetry) {
-      addMessage({ from: 'user', text: trimmed })
+      addMessage({ from: 'user', text: display ?? trimmed })
       setDraft('')
     }
     setError(null)
@@ -124,11 +135,11 @@ function ChatWidget() {
         { message: trimmed },
         { signal: controller.signal }
       )
-      addMessage({
-        from: 'bot',
-        text: data.reply,
-        suggestions: Array.isArray(data.suggestions) ? data.suggestions.slice(0, 3) : [],
-      })
+      // Suggestions from the bot are already in the reply's language: label = message
+      const suggestions = Array.isArray(data.suggestions)
+        ? data.suggestions.slice(0, 3).map((suggestion) => ({ label: suggestion, message: suggestion }))
+        : []
+      addMessage({ from: 'bot', text: data.reply, suggestions })
     } catch (requestError) {
       // Cancelled because the user changed or the widget unmounted: nothing to show
       if (axios.isCancel(requestError)) return
@@ -156,7 +167,7 @@ function ChatWidget() {
         <div
           ref={panelRef}
           role="dialog"
-          aria-label="DopaBot chat"
+          aria-label={t('chat.dialogLabel')}
           tabIndex={-1}
           onKeyDown={(event) => {
             if (event.key === 'Escape') closeChat()
@@ -170,7 +181,7 @@ function ChatWidget() {
             </div>
             <button
               type="button"
-              aria-label="Close chat"
+              aria-label={t('chat.close')}
               onClick={closeChat}
               className={`w-8 h-8 rounded-full hover:bg-gray-100 ${focusRing}`}
             >
@@ -181,7 +192,7 @@ function ChatWidget() {
           <div
             ref={listRef}
             aria-live="polite"
-            aria-label="Chat messages"
+            aria-label={t('chat.messages')}
             className="flex-1 overflow-y-auto p-4 flex flex-col gap-3"
           >
             {messages.map((message, index) => (
@@ -193,24 +204,27 @@ function ChatWidget() {
                       : 'self-start bg-gray-200'
                   }`}
                 >
-                  {message.text}
+                  {message.isGreeting ? t('chat.greeting') : message.text}
                 </p>
 
                 {/* Quick replies only under the latest bot answer */}
                 {index === lastBotIndex && user && message.suggestions?.length > 0 && (
                   <div className="flex flex-wrap gap-2">
-                    {message.suggestions.map((suggestion) => (
-                      <button
-                        key={suggestion}
-                        type="button"
-                        aria-label={`Ask DopaBot: ${suggestion}`}
-                        onClick={() => send(suggestion)}
-                        disabled={isTyping}
-                        className={smallButton}
-                      >
-                        {suggestion}
-                      </button>
-                    ))}
+                    {message.suggestions.map((suggestion) => {
+                      const label = suggestion.labelKey ? t(suggestion.labelKey) : suggestion.label
+                      return (
+                        <button
+                          key={suggestion.message}
+                          type="button"
+                          aria-label={t('chat.ask', { text: label })}
+                          onClick={() => send(suggestion.message, { display: label })}
+                          disabled={isTyping}
+                          className={smallButton}
+                        >
+                          {label}
+                        </button>
+                      )
+                    })}
                   </div>
                 )}
               </Fragment>
@@ -221,7 +235,7 @@ function ChatWidget() {
                 role="status"
                 className="self-start bg-gray-200 rounded-xl px-3 py-2 text-sm text-gray-600 animate-pulse"
               >
-                DopaBot is typing…
+                {t('chat.typing')}
               </p>
             )}
 
@@ -230,16 +244,16 @@ function ChatWidget() {
                 role="alert"
                 className="flex flex-col items-start gap-2 rounded-xl border border-red-200 p-3 text-sm text-red-600"
               >
-                <p>{ERRORS[error.kind]}</p>
+                <p>{t(ERROR_KEYS[error.kind], { max: MAX_LENGTH })}</p>
                 {error.kind === 'retry' && user && (
                   <button
                     type="button"
-                    aria-label="Retry sending the last message"
+                    aria-label={t('chat.retryLabel')}
                     onClick={() => send(error.text, { isRetry: true })}
                     disabled={isTyping}
                     className={smallButton}
                   >
-                    Retry
+                    {t('chat.retry')}
                   </button>
                 )}
               </div>
@@ -251,14 +265,14 @@ function ChatWidget() {
               <form onSubmit={handleSubmit} className="flex flex-col gap-1">
                 <div className="flex items-center gap-2">
                   <label htmlFor="chat-input" className="sr-only">
-                    Message
+                    {t('chat.message')}
                   </label>
                   <input
                     ref={inputRef}
                     id="chat-input"
                     type="text"
                     autoComplete="off"
-                    placeholder="Type a message…"
+                    placeholder={t('chat.placeholder')}
                     maxLength={MAX_LENGTH}
                     aria-describedby={remaining < COUNTER_THRESHOLD ? 'chat-counter' : undefined}
                     value={draft}
@@ -268,29 +282,29 @@ function ChatWidget() {
                   />
                   <button
                     type="submit"
-                    aria-label="Send message"
+                    aria-label={t('chat.sendLabel')}
                     disabled={!draft.trim() || isTyping}
                     className={`shrink-0 bg-gray-900 hover:bg-gray-700 text-white rounded-full px-4 py-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-900 ${focusRing}`}
                   >
-                    Send
+                    {t('chat.send')}
                   </button>
                 </div>
                 {remaining < COUNTER_THRESHOLD && (
                   <p id="chat-counter" className="px-4 text-xs text-gray-600">
-                    {remaining} {remaining === 1 ? 'character' : 'characters'} left
+                    {t('chat.charactersLeft', { count: remaining })}
                   </p>
                 )}
               </form>
             ) : (
               !isLoading && (
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm text-gray-600">Log in to chat with DopaBot</p>
+                  <p className="text-sm text-gray-600">{t('chat.loginPrompt')}</p>
                   <Link
                     to="/login"
                     onClick={() => setIsOpen(false)}
                     className={`shrink-0 bg-gray-900 hover:bg-gray-700 text-white rounded-full px-4 py-2 text-sm font-medium ${focusRing}`}
                   >
-                    Log in
+                    {t('common.logIn')}
                   </Link>
                 </div>
               )
@@ -303,7 +317,7 @@ function ChatWidget() {
         ref={toggleRef}
         type="button"
         onClick={() => setIsOpen((open) => !open)}
-        aria-label={isOpen ? 'Close DopaBot chat' : 'Open DopaBot chat'}
+        aria-label={isOpen ? t('chat.closeToggle') : t('chat.open')}
         aria-expanded={isOpen}
         className={`fixed bottom-4 right-4 z-50 w-14 h-14 rounded-full bg-gray-900 hover:bg-gray-700 text-white text-2xl shadow-md flex items-center justify-center ${focusRing}`}
       >
