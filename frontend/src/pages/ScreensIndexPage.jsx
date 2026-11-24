@@ -8,6 +8,7 @@ const SCREENS = [
   { path: '/shop', name: 'Shop (catalog, filters, pagination)', access: 'No' },
   { path: '/about', name: 'About us', access: 'No' },
   { path: '/cart', name: 'Cart', access: 'No' },
+  { path: '/favorites', name: 'Favorites (saved in the browser per user)', access: 'Yes' },
   { path: '/login', name: 'Log in / Sign up', access: 'No' },
   { path: '/checkout', name: 'Checkout', access: 'Yes' },
   { path: '/order-success', name: 'Order success (without an order redirects to /shop)', access: 'No' },

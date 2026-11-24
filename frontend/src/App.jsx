@@ -1,10 +1,12 @@
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { CartProvider } from './context/CartContext'
+import { FavoritesProvider } from './context/FavoritesContext'
 import Header from './components/Header'
 import HomePage from './pages/HomePage'
 import ShopPage from './pages/ShopPage'
 import CartPage from './pages/CartPage'
+import FavoritesPage from './pages/FavoritesPage'
 import AuthPage from './pages/AuthPage'
 import ProductPage from './pages/ProductPage'
 import CheckoutPage from './pages/CheckoutPage'
@@ -40,6 +42,14 @@ function AppLayout() {
         <Route path="/product/:id" element={<ProductPage />} />
         <Route path="/cart" element={<CartPage />} />
         <Route path="/login" element={<AuthPage />} />
+        <Route
+          path="/favorites"
+          element={
+            <ProtectedRoute>
+              <FavoritesPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/checkout"
           element={
@@ -107,9 +117,11 @@ function App() {
   return (
     <AuthProvider>
       <CartProvider>
-        <BrowserRouter>
-          <AppLayout />
-        </BrowserRouter>
+        <FavoritesProvider>
+          <BrowserRouter>
+            <AppLayout />
+          </BrowserRouter>
+        </FavoritesProvider>
       </CartProvider>
     </AuthProvider>
   )
