@@ -1,35 +1,37 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useCart } from '../context/CartContext'
+import { useFavorites } from '../context/FavoritesContext'
+import LanguageSwitcher from './LanguageSwitcher'
+import { formatDp } from '../utils/format'
 
-// 95500 -> "95 500"
-function formatDp(amount) {
-  return String(amount).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
-}
-
+// Main navigation; `key` is the translation key of the label
 const links = [
-  { href: '/', label: 'Home' },
-  { href: '/shop', label: 'Shop' },
-  { href: '/about', label: 'About us' },
+  { href: '/', key: 'header.home' },
+  { href: '/shop', key: 'header.shop' },
+  { href: '/about', key: 'header.about' },
 ]
 
-// Посилання в меню профілю
+// Links in the profile menu
 const profileLinks = [
-  { href: '/orders', label: 'My orders' },
-  { href: '/dashboard', label: 'Savings dashboard' },
-  { href: '/tracking', label: 'Track parcel' },
-  { href: '/profile', label: 'Profile' },
+  { href: '/orders', key: 'header.myOrders' },
+  { href: '/dashboard', key: 'header.dashboard' },
+  { href: '/tracking', key: 'header.tracking' },
+  { href: '/profile', key: 'header.profile' },
 ]
 
 function Header() {
+  const { t } = useTranslation()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isProfileOpen, setIsProfileOpen] = useState(false)
   const profileRef = useRef(null)
   const { totalItems } = useCart()
+  const { count: favoritesCount } = useFavorites()
   const { user, isLoading, logout } = useAuth()
 
-  // Закриваємо меню профілю кліком поза ним або клавішею Escape
+  // Close the profile menu on a click outside it or on Escape
   useEffect(() => {
     if (!isProfileOpen) return
 
@@ -62,24 +64,32 @@ function Header() {
           Logo
         </div>
 
-        {/* Меню для широких екранів */}
-        <nav className="hidden md:flex gap-8 text-sm">
+        {/* Menu for wide screens */}
+        <nav className="hidden md:flex gap-6 lg:gap-8 text-sm">
           {links.map((link) => (
-            <Link key={link.href} to={link.href}>
-              {link.label}
+            <Link key={link.href} to={link.href} className="whitespace-nowrap">
+              {t(link.key)}
             </Link>
           ))}
         </nav>
 
         <div className="flex shrink-0 items-center gap-2 sm:gap-4 text-lg">
+          <LanguageSwitcher className="hidden md:flex" />
           {!isLoading && user && (
             <span className="text-sm font-medium whitespace-nowrap">
-              {formatDp(user.virtual_balance)} DP
+              {formatDp(user.virtual_balance)}
             </span>
           )}
           <div className="flex shrink-0 items-center gap-2 sm:gap-4">
-            <span>♡</span>
-            <Link to="/cart" className="relative" aria-label={`Cart, ${totalItems} items`}>
+            <Link to="/favorites" className="relative" aria-label={t('header.favorites')}>
+              <span>♡</span>
+              {favoritesCount > 0 && (
+                <span className="absolute -top-2 -right-3 min-w-5 h-5 px-1 flex items-center justify-center rounded-full bg-green-400 text-white text-xs font-bold">
+                  {favoritesCount > 99 ? '99+' : favoritesCount}
+                </span>
+              )}
+            </Link>
+            <Link to="/cart" className="relative" aria-label={t('header.cart', { count: totalItems })}>
               <span>🛒</span>
               {totalItems > 0 && (
                 <span className="absolute -top-2 -right-3 min-w-5 h-5 px-1 flex items-center justify-center rounded-full bg-green-400 text-white text-xs font-bold">
@@ -88,13 +98,13 @@ function Header() {
               )}
             </Link>
             {isLoading ? (
-              // Поки перевіряється сесія, іконка просто стоїть на місці, без дії
+              // While the session is checked the icon just stays in place, without an action
               <span className="opacity-50">👤</span>
             ) : user ? (
               <div ref={profileRef} className="relative">
                 <button
                   type="button"
-                  aria-label="Profile menu"
+                  aria-label={t('header.profileMenu')}
                   aria-expanded={isProfileOpen}
                   onClick={() => setIsProfileOpen(!isProfileOpen)}
                 >
@@ -105,7 +115,7 @@ function Header() {
                     <p className="text-sm text-gray-600 truncate" title={user.email}>
                       {user.email}
                     </p>
-                    <nav aria-label="Account" className="-mx-2 flex flex-col">
+                    <nav aria-label={t('header.account')} className="-mx-2 flex flex-col">
                       {profileLinks.map((link) => (
                         <Link
                           key={link.href}
@@ -113,7 +123,7 @@ function Header() {
                           onClick={() => setIsProfileOpen(false)}
                           className="rounded-lg px-2 py-2 text-sm hover:bg-gray-100"
                         >
-                          {link.label}
+                          {t(link.key)}
                         </Link>
                       ))}
                       {user.role === 'admin' && (
@@ -122,7 +132,7 @@ function Header() {
                           onClick={() => setIsProfileOpen(false)}
                           className="rounded-lg px-2 py-2 text-sm font-medium hover:bg-gray-100"
                         >
-                          Admin panel
+                          {t('header.adminPanel')}
                         </Link>
                       )}
                     </nav>
@@ -131,23 +141,23 @@ function Header() {
                       onClick={handleLogout}
                       className="bg-gray-200 hover:bg-gray-300 rounded-full px-4 py-2 text-sm font-medium"
                     >
-                      Log out
+                      {t('common.logOut')}
                     </button>
                   </div>
                 )}
               </div>
             ) : (
-              <Link to="/login" aria-label="Log in">
+              <Link to="/login" aria-label={t('common.logIn')}>
                 <span>👤</span>
               </Link>
             )}
           </div>
 
-          {/* Бургер, видно лише на вузьких екранах */}
+          {/* Burger, only on narrow screens */}
           <button
             type="button"
             className="md:hidden shrink-0 flex flex-col justify-center gap-1.5 w-8 h-8"
-            aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
+            aria-label={isMenuOpen ? t('header.closeMenu') : t('header.openMenu')}
             aria-expanded={isMenuOpen}
             onClick={() => setIsMenuOpen(!isMenuOpen)}
           >
@@ -158,7 +168,7 @@ function Header() {
         </div>
       </div>
 
-      {/* Випадне меню для телефонів */}
+      {/* Drop-down menu for phones */}
       {isMenuOpen && (
         <nav className="md:hidden absolute left-0 right-0 top-full z-10 flex flex-col bg-white border-b border-gray-200 shadow-md">
           {links.map((link) => (
@@ -168,9 +178,15 @@ function Header() {
               className="px-6 py-3 text-sm hover:bg-gray-100"
               onClick={() => setIsMenuOpen(false)}
             >
-              {link.label}
+              {t(link.key)}
             </Link>
           ))}
+          <div className="px-6 py-3 flex items-center justify-between gap-4 border-t border-gray-200">
+            <span className="text-sm text-gray-600" aria-hidden="true">
+              {t('header.language')}
+            </span>
+            <LanguageSwitcher />
+          </div>
         </nav>
       )}
     </header>
