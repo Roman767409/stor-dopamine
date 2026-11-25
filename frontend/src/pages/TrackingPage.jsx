@@ -1,19 +1,23 @@
 // Parcel tracking: search by tracking number and a vertical status timeline
 // from GET /api/orders/track/{tracking_number}, refreshed every 5 s until delivered
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import api from '../api'
 import ErrorState from '../components/ErrorState'
 import LoadingSkeleton from '../components/LoadingSkeleton'
 import PageContainer from '../components/PageContainer'
 import StatusBadge from '../components/StatusBadge'
+import { getErrorKey } from '../utils/apiErrors'
 import { formatLocalDateTime } from '../utils/format'
 import { getStatusLabel } from '../utils/orderStatus'
 import { btnPrimary, cardClass, errorClass, inputClass, labelClass } from '../utils/styles'
 
 const TRACKING_PATTERN = /^DS-[A-Z0-9]{10}$/
-const FORMAT_ERROR = 'Wrong format. Example: DS-1A2B3C4D5E'
-const NOT_FOUND_ERROR = 'Parcel not found'
+const EXAMPLE_NUMBER = 'DS-1A2B3C4D5E'
+// Translation keys of the lookup errors
+const FORMAT_ERROR = 'tracking.formatError'
+const NOT_FOUND_ERROR = 'tracking.notFound'
 const POLL_INTERVAL_MS = 5000
 
 // 404 TRACKING_NOT_FOUND (missing or someone else's parcel) or 422 (rejected format)
@@ -26,13 +30,15 @@ function isNotFound(error) {
 }
 
 function TrackingPage() {
+  const { t } = useTranslation()
   const params = useParams()
   const navigate = useNavigate()
   const trackingNumber = params.trackingNumber?.toUpperCase() ?? ''
   const [value, setValue] = useState(trackingNumber)
+  // Translation key of the form error ('' when there is none)
   const [formError, setFormError] = useState('')
   const [attempt, setAttempt] = useState(0)
-  // Last server answer together with the request key it belongs to
+  // Last server answer together with the request key it belongs to (error is a translation key)
   const [result, setResult] = useState({ key: null, parcel: null, notFound: false, error: null })
 
   // No request for an empty or malformed number
@@ -70,9 +76,7 @@ function TrackingPage() {
               key: requestKey,
               parcel: null,
               notFound,
-              error: notFound
-                ? null
-                : error.response?.data?.error?.message || 'Could not load tracking info',
+              error: notFound ? null : getErrorKey(error, 'tracking.loadError'),
             })
             return
           }
@@ -106,21 +110,22 @@ function TrackingPage() {
   let lookupError = ''
   if (trackingNumber && !isValidNumber) lookupError = FORMAT_ERROR
   else if (current?.notFound) lookupError = NOT_FOUND_ERROR
-  const error = formError || lookupError
+  const errorKey = formError || lookupError
+  const error = errorKey ? t(errorKey, { example: EXAMPLE_NUMBER }) : ''
 
   const parcel = current?.parcel ?? null
 
   return (
-    <PageContainer title="Track parcel">
+    <PageContainer title={t('tracking.title')}>
       <form onSubmit={handleSubmit} noValidate className="max-w-xl flex flex-col gap-1">
         <label htmlFor="tracking-number" className={labelClass}>
-          Tracking number
+          {t('common.trackingNumber')}
         </label>
         <div className="flex flex-col sm:flex-row sm:items-end gap-4">
           <input
             id="tracking-number"
             type="text"
-            placeholder="DS-1A2B3C4D5E"
+            placeholder={EXAMPLE_NUMBER}
             autoComplete="off"
             value={value}
             onChange={(event) => {
@@ -132,7 +137,7 @@ function TrackingPage() {
             className={`${inputClass} uppercase placeholder:normal-case`}
           />
           <button type="submit" className={`shrink-0 ${btnPrimary}`}>
-            Track
+            {t('tracking.track')}
           </button>
         </div>
         {error && (
@@ -150,7 +155,7 @@ function TrackingPage() {
 
       {current?.error && !formError && (
         <div className="max-w-xl">
-          <ErrorState message={current.error} onRetry={() => setAttempt((count) => count + 1)} />
+          <ErrorState message={t(current.error)} onRetry={() => setAttempt((count) => count + 1)} />
         </div>
       )}
 
@@ -197,13 +202,13 @@ function TrackingPage() {
                   </span>
                   <div className="flex flex-col">
                     <span className={`font-semibold ${labelColor}`}>
-                      {getStatusLabel(step.status)}
-                      {isCurrent && <span className="sr-only"> (current status)</span>}
+                      {getStatusLabel(step.status, t)}
+                      {isCurrent && <span className="sr-only"> {t('tracking.currentStatus')}</span>}
                     </span>
                     <span className="text-sm text-gray-600">
                       {step.is_reached
                         ? formatLocalDateTime(step.reached_at)
-                        : `Expected ${formatLocalDateTime(step.reached_at)}`}
+                        : t('tracking.expected', { date: formatLocalDateTime(step.reached_at) })}
                     </span>
                   </div>
                 </li>
@@ -213,7 +218,7 @@ function TrackingPage() {
 
           <p className="mt-6 pt-4 border-t border-gray-200 text-sm">
             <span className="text-gray-600">
-              {parcel.status === 'DELIVERED' ? 'Delivered: ' : 'Estimated delivery: '}
+              {parcel.status === 'DELIVERED' ? t('tracking.delivered') : t('tracking.estimatedDelivery')}{' '}
             </span>
             <span className="font-semibold">{formatLocalDateTime(parcel.estimated_delivery_at)}</span>
           </p>

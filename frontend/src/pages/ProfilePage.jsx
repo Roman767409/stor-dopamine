@@ -1,35 +1,28 @@
 // Profile screen: account info from GET /api/auth/me, balance reset and log out
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import api from '../api'
 import { useAuth } from '../context/AuthContext'
 import ConfirmModal from '../components/ConfirmModal'
 import PageContainer from '../components/PageContainer'
-import { getApiError } from '../utils/apiErrors'
-import { formatDate, formatDp, toNumber } from '../utils/format'
+import { getErrorKey } from '../utils/apiErrors'
+import { formatDp, formatLocalDate, toNumber } from '../utils/format'
 import { btnPrimary, btnSecondary, cardClass } from '../utils/styles'
 
 // Must match STARTING_BALANCE in backend/app/core/constants.py
 const STARTING_BALANCE = 100000
 
-// Text for a failed reset request
-function resetErrorMessage(error) {
-  const apiError = getApiError(error)
-  if (apiError?.code === 'NOTHING_TO_RESET') {
-    return 'Your balance is already at the starting amount'
-  }
-  return apiError?.message || 'Could not reset the balance'
-}
-
 function ProfilePage() {
+  const { t } = useTranslation()
   const { user, logout, updateBalance, refreshUser } = useAuth()
   const navigate = useNavigate()
   const [isConfirmOpen, setIsConfirmOpen] = useState(false)
   const [isResetting, setIsResetting] = useState(false)
   // Synchronous guard: two fast clicks happen before the disabled state renders
   const resetLockRef = useRef(false)
-  // Result of the last reset: { text, isError }
-  const [message, setMessage] = useState({ text: '', isError: false })
+  // Result of the last reset: { key, isError }, key is a translation key ('' = no message)
+  const [message, setMessage] = useState({ key: '', isError: false })
 
   // The user in the context may be stale (e.g. savings after new orders): reload it once
   useEffect(() => {
@@ -51,9 +44,9 @@ function ProfilePage() {
     try {
       const response = await api.post('/api/users/me/balance/reset')
       updateBalance(response.data.virtual_balance)
-      setMessage({ text: 'Balance reset', isError: false })
+      setMessage({ key: 'profile.resetDone', isError: false })
     } catch (error) {
-      setMessage({ text: resetErrorMessage(error), isError: true })
+      setMessage({ key: getErrorKey(error, 'profile.resetError'), isError: true })
     } finally {
       resetLockRef.current = false
       setIsResetting(false)
@@ -66,21 +59,23 @@ function ProfilePage() {
     navigate('/')
   }
 
+  const startingAmount = formatDp(STARTING_BALANCE)
+
   const rows = [
-    { label: 'Email', value: user.email },
-    { label: 'Role', value: user.role === 'admin' ? 'Admin' : 'Client' },
-    { label: 'Balance', value: `${formatDp(balance)} DP` },
-    { label: 'Total saved', value: `${formatDp(user.total_saved_amount)} DP` },
-    { label: 'Registered', value: user.created_at ? formatDate(user.created_at) : '—' },
+    { key: 'profile.email', value: user.email },
+    { key: 'profile.role', value: user.role === 'admin' ? t('profile.roleAdmin') : t('profile.roleClient') },
+    { key: 'profile.balance', value: formatDp(balance) },
+    { key: 'profile.totalSaved', value: formatDp(user.total_saved_amount) },
+    { key: 'profile.registered', value: user.created_at ? formatLocalDate(user.created_at) : '—' },
   ]
 
   return (
-    <PageContainer title="Profile">
+    <PageContainer title={t('profile.title')}>
       <div className="max-w-xl flex flex-col gap-6">
         <dl className={`${cardClass} grid grid-cols-1 sm:grid-cols-2 gap-4`}>
           {rows.map((row) => (
-            <div key={row.label} className="min-w-0">
-              <dt className="text-xs text-gray-600">{row.label}</dt>
+            <div key={row.key} className="min-w-0">
+              <dt className="text-xs text-gray-600">{t(row.key)}</dt>
               <dd className="font-medium break-words">{row.value}</dd>
             </div>
           ))}
@@ -90,39 +85,39 @@ function ProfilePage() {
           role="status"
           className={`text-sm font-medium min-h-5 ${message.isError ? 'text-red-600' : 'text-green-700'}`}
         >
-          {message.text}
+          {message.key ? t(message.key) : ''}
         </p>
 
         <div className="flex flex-col sm:flex-row gap-3">
           <button
             type="button"
             onClick={() => {
-              setMessage({ text: '', isError: false })
+              setMessage({ key: '', isError: false })
               setIsConfirmOpen(true)
             }}
             disabled={isAtStart || isResetting}
-            title={isAtStart ? 'Your balance is already 100 000 DP' : undefined}
+            title={isAtStart ? t('profile.alreadyAtStart', { amount: startingAmount }) : undefined}
             aria-describedby={isAtStart ? 'reset-hint' : undefined}
             className={btnSecondary}
           >
-            Reset balance to 100 000 DP
+            {t('profile.resetButton', { amount: startingAmount })}
           </button>
           <button type="button" onClick={handleLogout} className={btnPrimary}>
-            Log out
+            {t('common.logOut')}
           </button>
         </div>
         {isAtStart && (
           <p id="reset-hint" className="-mt-3 text-xs text-gray-600">
-            Your balance is already 100 000 DP, there is nothing to reset.
+            {t('profile.alreadyAtStartHint', { amount: startingAmount })}
           </p>
         )}
       </div>
 
       {isConfirmOpen && (
         <ConfirmModal
-          title="Reset your balance to 100 000 DP?"
-          text="Your orders and savings stay as they are."
-          confirmLabel="Reset balance"
+          title={t('profile.confirmTitle', { amount: startingAmount })}
+          text={t('profile.confirmText')}
+          confirmLabel={t('profile.confirmButton')}
           isBusy={isResetting}
           onConfirm={handleConfirmReset}
           onCancel={() => {

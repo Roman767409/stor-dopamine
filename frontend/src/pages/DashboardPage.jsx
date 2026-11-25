@@ -1,6 +1,7 @@
 // Savings dashboard: key metrics, 30-day chart, categories, milestones and week comparison
 // from GET /api/analytics/savings
 import { useEffect, useState } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import api from '../api'
 import EmptyState from '../components/EmptyState'
@@ -8,22 +9,18 @@ import ErrorState from '../components/ErrorState'
 import LoadingSkeleton from '../components/LoadingSkeleton'
 import PageContainer from '../components/PageContainer'
 import SavingsChart from '../components/SavingsChart'
-import { formatDp } from '../utils/format'
+import { getErrorKey } from '../utils/apiErrors'
+import { formatDp, formatNumber, toNumber } from '../utils/format'
 import { cardClass } from '../utils/styles'
 
 const MILESTONES = [1000, 10000, 50000]
 const DAYS = 30
 
-// Any missing or non-numeric value becomes 0, so the page never shows NaN
-function toNumber(value) {
-  const number = Number(value)
-  return Number.isFinite(number) ? number : 0
-}
-
 function DashboardPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [attempt, setAttempt] = useState(0)
-  // Last server answer together with the request key it belongs to
+  // Last server answer together with the request key it belongs to (error is a translation key)
   const [result, setResult] = useState({ key: null, savings: null, error: null })
 
   const requestKey = JSON.stringify([DAYS, attempt])
@@ -46,7 +43,7 @@ function DashboardPage() {
         setResult({
           key: requestKey,
           savings: null,
-          error: error.response?.data?.error?.message || 'Could not load your savings',
+          error: getErrorKey(error, 'dashboard.loadError'),
         })
       })
 
@@ -58,7 +55,7 @@ function DashboardPage() {
 
   if (isLoading) {
     return (
-      <PageContainer title="Savings dashboard">
+      <PageContainer title={t('dashboard.title')}>
         <LoadingSkeleton variant="list" count={4} />
       </PageContainer>
     )
@@ -66,8 +63,8 @@ function DashboardPage() {
 
   if (result.error) {
     return (
-      <PageContainer title="Savings dashboard">
-        <ErrorState message={result.error} onRetry={() => setAttempt((count) => count + 1)} />
+      <PageContainer title={t('dashboard.title')}>
+        <ErrorState message={t(result.error)} onRetry={() => setAttempt((count) => count + 1)} />
       </PageContainer>
     )
   }
@@ -77,11 +74,11 @@ function DashboardPage() {
   // No orders yet: nothing to chart, show a friendly hint instead of empty widgets
   if (toNumber(savings.orders_count) === 0) {
     return (
-      <PageContainer title="Savings dashboard">
+      <PageContainer title={t('dashboard.title')}>
         <EmptyState
-          title="No savings yet"
-          text="Place your first order with virtual DP and see how much real money you didn't spend."
-          actionLabel="Go to shop"
+          title={t('dashboard.emptyTitle')}
+          text={t('dashboard.emptyText')}
+          actionLabel={t('common.goToShop')}
           onAction={() => navigate('/shop')}
         />
       </PageContainer>
@@ -100,10 +97,10 @@ function DashboardPage() {
   }))
 
   const metrics = [
-    { label: 'Saved money', value: `${formatDp(total)} DP` },
-    { label: 'Orders', value: String(toNumber(savings.orders_count)) },
-    { label: 'Average order', value: `${formatDp(savings.average_order_value)} DP` },
-    { label: 'Largest order', value: `${formatDp(savings.largest_order)} DP` },
+    { key: 'dashboard.savedMoney', value: formatDp(total) },
+    { key: 'dashboard.orders', value: formatNumber(savings.orders_count) },
+    { key: 'dashboard.averageOrder', value: formatDp(savings.average_order_value) },
+    { key: 'dashboard.largestOrder', value: formatDp(savings.largest_order) },
   ]
 
   const categoryTotal = categories.reduce((sum, item) => sum + item.amount, 0)
@@ -119,15 +116,19 @@ function DashboardPage() {
   const isUp = weekChange !== null && weekChange >= 0
 
   return (
-    <PageContainer title="Savings dashboard">
+    <PageContainer title={t('dashboard.title')}>
       <p className="-mt-4 mb-8 text-lg">
-        You didn't spend <strong>{formatDp(total)} DP</strong> of real money 🎉
+        <Trans
+          i18nKey="dashboard.notSpent"
+          values={{ amount: formatDp(total) }}
+          components={{ strong: <strong /> }}
+        />
       </p>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         {metrics.map((metric) => (
-          <div key={metric.label} className={cardClass}>
-            <p className="text-sm text-gray-600">{metric.label}</p>
+          <div key={metric.key} className={cardClass}>
+            <p className="text-sm text-gray-600">{t(metric.key)}</p>
             <p className="mt-1 text-xl md:text-2xl font-bold break-words">{metric.value}</p>
           </div>
         ))}
@@ -136,14 +137,14 @@ function DashboardPage() {
       <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
         <section className={`${cardClass} lg:col-span-2 min-w-0`} aria-labelledby="chart-title">
           <h2 id="chart-title" className="text-xl font-bold mb-4">
-            Last 30 days
+            {t('common.lastDays', { count: DAYS })}
           </h2>
           <SavingsChart data={daily} />
         </section>
 
         <section className={cardClass} aria-labelledby="categories-title">
           <h2 id="categories-title" className="text-xl font-bold mb-4">
-            By category
+            {t('dashboard.byCategory')}
           </h2>
           <ul className="flex flex-col gap-4">
             {categories.map((item) => {
@@ -151,9 +152,9 @@ function DashboardPage() {
               return (
                 <li key={item.slug} className="flex flex-col gap-1 text-sm">
                   <div className="flex justify-between gap-4">
-                    <span className="font-medium">{item.name}</span>
+                    <span className="font-medium min-w-0 break-words">{item.name}</span>
                     <span className="text-gray-600 whitespace-nowrap">
-                      {formatDp(item.amount)} DP · {percent}%
+                      {formatDp(item.amount)} · {percent}%
                     </span>
                   </div>
                   <div className="h-2 rounded-full bg-gray-200" aria-hidden="true">
@@ -170,7 +171,7 @@ function DashboardPage() {
 
         <section className={`${cardClass} lg:col-span-2`} aria-labelledby="milestones-title">
           <h2 id="milestones-title" className="text-xl font-bold mb-6">
-            Milestones
+            {t('dashboard.milestones')}
           </h2>
 
           <div
@@ -179,7 +180,7 @@ function DashboardPage() {
             aria-valuemin={0}
             aria-valuemax={goal}
             aria-valuenow={Math.min(total, goal)}
-            aria-label="Progress to 50 000 DP"
+            aria-label={t('dashboard.progressTo', { amount: formatDp(goal) })}
           >
             <div className="h-3 rounded-full bg-gray-200">
               <div className="h-3 rounded-full bg-green-400" style={{ width: `${progress}%` }} />
@@ -203,7 +204,7 @@ function DashboardPage() {
                   <span
                     className={`text-xs whitespace-nowrap ${isReached ? 'font-semibold text-green-700' : 'text-gray-600'}`}
                   >
-                    {formatDp(milestone)}
+                    {formatNumber(milestone)}
                   </span>
                 </div>
               )
@@ -217,10 +218,12 @@ function DashboardPage() {
                 <li key={milestone} className="flex justify-between gap-4">
                   <span className="font-medium">
                     <span aria-hidden="true">{isReached ? '✓ ' : '○ '}</span>
-                    {formatDp(milestone)} DP
+                    {formatDp(milestone)}
                   </span>
                   <span className={isReached ? 'font-medium text-green-700' : 'text-gray-600'}>
-                    {isReached ? 'Reached' : `${formatDp(milestone - total)} DP to go`}
+                    {isReached
+                      ? t('dashboard.reached')
+                      : t('dashboard.toGo', { amount: formatDp(milestone - total) })}
                   </span>
                 </li>
               )
@@ -230,10 +233,10 @@ function DashboardPage() {
 
         <section className={cardClass} aria-labelledby="week-title">
           <h2 id="week-title" className="text-xl font-bold mb-4">
-            Compared to last week
+            {t('dashboard.comparedTitle')}
           </h2>
           {weekChange === null ? (
-            <p className="text-gray-600">No savings in the previous week to compare with.</p>
+            <p className="text-gray-600">{t('dashboard.noPreviousWeek')}</p>
           ) : (
             <>
               <p
@@ -243,18 +246,18 @@ function DashboardPage() {
                 {Math.abs(weekChange)}%
               </p>
               <p className="text-sm text-gray-600">
-                {isUp ? 'more' : 'less'} saved than the week before
+                {isUp ? t('dashboard.moreThanPrevious') : t('dashboard.lessThanPrevious')}
               </p>
             </>
           )}
           <dl className="mt-4 flex flex-col gap-2 text-sm">
             <div className="flex justify-between gap-4">
-              <dt className="text-gray-600">Last 7 days</dt>
-              <dd className="font-medium whitespace-nowrap">{formatDp(lastWeek)} DP</dd>
+              <dt className="text-gray-600">{t('dashboard.last7Days')}</dt>
+              <dd className="font-medium whitespace-nowrap">{formatDp(lastWeek)}</dd>
             </div>
             <div className="flex justify-between gap-4">
-              <dt className="text-gray-600">Previous 7 days</dt>
-              <dd className="font-medium whitespace-nowrap">{formatDp(previousWeek)} DP</dd>
+              <dt className="text-gray-600">{t('dashboard.previous7Days')}</dt>
+              <dd className="font-medium whitespace-nowrap">{formatDp(previousWeek)}</dd>
             </div>
           </dl>
         </section>

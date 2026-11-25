@@ -1,5 +1,6 @@
 // "My orders" screen: paginated list of the current user's orders from GET /api/orders
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import api from '../api'
 import EmptyState from '../components/EmptyState'
@@ -7,6 +8,7 @@ import ErrorState from '../components/ErrorState'
 import LoadingSkeleton from '../components/LoadingSkeleton'
 import PageContainer from '../components/PageContainer'
 import StatusBadge from '../components/StatusBadge'
+import { getErrorKey } from '../utils/apiErrors'
 import { formatDp, formatLocalDate } from '../utils/format'
 import { btnSmall, cardClass } from '../utils/styles'
 
@@ -19,12 +21,13 @@ function parsePage(value) {
 }
 
 function OrdersPage() {
+  const { t } = useTranslation()
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   // Page lives in the URL so "Back" from order details returns to the same page
   const page = parsePage(searchParams.get('page'))
   const [attempt, setAttempt] = useState(0)
-  // Last server response together with the request key it belongs to
+  // Last server response together with the request key it belongs to (error is a translation key)
   const [result, setResult] = useState({ key: null, items: [], total: 0, error: null })
 
   const requestKey = JSON.stringify([page, attempt])
@@ -58,7 +61,7 @@ function OrdersPage() {
           key: requestKey,
           items: [],
           total: 0,
-          error: error.response?.data?.error?.message || 'Could not load orders',
+          error: getErrorKey(error, 'orders.loadError'),
         })
       })
 
@@ -71,18 +74,18 @@ function OrdersPage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   return (
-    <PageContainer title="My orders">
+    <PageContainer title={t('orders.title')}>
       {isLoading && <LoadingSkeleton variant="list" />}
 
       {!isLoading && error && (
-        <ErrorState message={error} onRetry={() => setAttempt((value) => value + 1)} />
+        <ErrorState message={t(error)} onRetry={() => setAttempt((value) => value + 1)} />
       )}
 
       {!isLoading && !error && orders.length === 0 && (
         <EmptyState
-          title="No orders yet"
-          text="Your orders will appear here after checkout."
-          actionLabel="Go to shop"
+          title={t('orders.emptyTitle')}
+          text={t('orders.emptyText')}
+          actionLabel={t('common.goToShop')}
           onAction={() => navigate('/shop')}
         />
       )}
@@ -97,22 +100,22 @@ function OrdersPage() {
               >
                 <dl className="flex-1 min-w-0 grid grid-cols-2 sm:grid-cols-4 gap-4 sm:items-center">
                   <div>
-                    <dt className="text-xs text-gray-600">Date</dt>
+                    <dt className="text-xs text-gray-600">{t('orders.date')}</dt>
                     <dd className="font-medium">{formatLocalDate(order.created_at)}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs text-gray-600">Tracking number</dt>
+                    <dt className="text-xs text-gray-600">{t('common.trackingNumber')}</dt>
                     <dd className="font-medium break-all">{order.tracking_number}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs text-gray-600">Total</dt>
-                    <dd className="font-bold whitespace-nowrap">{formatDp(order.total_price)} DP</dd>
+                    <dt className="text-xs text-gray-600">{t('common.total')}</dt>
+                    <dd className="font-bold whitespace-nowrap">{formatDp(order.total_price)}</dd>
                     <dd className="text-xs text-gray-600">
-                      {order.items_count} {order.items_count === 1 ? 'item' : 'items'}
+                      {t('common.itemsCount', { count: order.items_count })}
                     </dd>
                   </div>
                   <div>
-                    <dt className="sr-only">Status</dt>
+                    <dt className="sr-only">{t('common.status')}</dt>
                     <dd>
                       <StatusBadge status={order.status} />
                     </dd>
@@ -123,7 +126,7 @@ function OrdersPage() {
                     to={`/orders/${order.order_id}`}
                     className={`flex-1 text-center ${btnSmall}`}
                   >
-                    Details
+                    {t('orders.details')}
                   </Link>
                   {/* Same as the success page: the order goes in state for the tracking screen */}
                   <Link
@@ -131,7 +134,7 @@ function OrdersPage() {
                     state={{ order }}
                     className={`flex-1 text-center ${btnSmall}`}
                   >
-                    Track
+                    {t('orders.track')}
                   </Link>
                 </div>
               </li>
@@ -139,17 +142,17 @@ function OrdersPage() {
           </ul>
 
           {totalPages > 1 && (
-            <nav aria-label="Pagination" className="mt-10 flex items-center justify-center gap-4">
+            <nav aria-label={t('common.pagination')} className="mt-10 flex items-center justify-center gap-4">
               <button
                 type="button"
                 onClick={() => goToPage(page - 1)}
                 disabled={page <= 1}
                 className={btnSmall}
               >
-                Previous
+                {t('common.previous')}
               </button>
               <span className="text-sm font-medium">
-                Page {page} of {totalPages}
+                {t('common.pageOf', { page, total: totalPages })}
               </span>
               <button
                 type="button"
@@ -157,7 +160,7 @@ function OrdersPage() {
                 disabled={page >= totalPages}
                 className={btnSmall}
               >
-                Next
+                {t('common.next')}
               </button>
             </nav>
           )}
