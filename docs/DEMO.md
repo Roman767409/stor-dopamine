@@ -164,12 +164,18 @@ then type `I want to buy a new phone`.
 - A tip against impulse buying (the same question always gets the same tip).
 - For the phone: three reflective questions, the 24-hour rule and a
   suggestion to put the phone in this simulator's cart instead.
-- Each answer offers new quick buttons. Questions in Ukrainian
-  (`Який мій баланс?`) get Ukrainian answers.
+- Each answer offers new quick buttons.
 
-**Say:** "DopaBot is rule-based on purpose: keyword matching and the user's
-own data, with no external AI service. The chat history is not stored
-anywhere: reload the page and it is gone."
+**Languages (≈ 20 s):** Switch the interface to **PL** and click
+**Jakie mam saldo?**: the answer and the new quick buttons are in Polish.
+Then type `What is my balance?`: the bot answers in English, because the reply
+follows the language of the message (Ukrainian questions such as
+`Який мій баланс?` get Ukrainian answers). A neutral message such as `ok` gets
+the interface language. Switch back to **EN**.
+
+**Say:** "DopaBot is rule-based on purpose: keyword matching in English,
+Polish and Ukrainian and the user's own data, with no external AI service.
+The chat history is not stored anywhere: reload the page and it is gone."
 
 ### 9. Balance reset (≈ 30 s)
 
@@ -250,7 +256,7 @@ the venv activated:
 pytest -q
 ```
 
-**Expect:** `144 passed` in about a minute.
+**Expect:** `244 passed` in about two minutes.
 
 **Say:** "The tests run on a separate database, `dopaminestore_test`, which
 is recreated on every run; the dev data you just saw is never touched. They

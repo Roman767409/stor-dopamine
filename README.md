@@ -50,7 +50,8 @@ A presentation script is in [docs/DEMO.md](docs/DEMO.md).
 - Balance reset to 100 000 DP on the profile page.
 - **DopaBot** chat assistant (see [below](#dopabot-a-rule-based-chat-assistant)):
   answers questions about the balance, savings and the latest parcel with the
-  user's real data, and gives tips against impulse buying.
+  user's real data, and gives tips against impulse buying. Understands
+  English, Polish and Ukrainian and answers in the language of the message.
 
 **Administrators (admin role)**
 
@@ -127,7 +128,7 @@ stor_dopamine/
 │   │   ├── services/                   # business logic and transactions
 │   │   └── repositories/               # database queries
 │   ├── alembic/                        # migrations (3 revisions)
-│   ├── tests/                          # pytest suite (144 tests)
+│   ├── tests/                          # pytest suite (244 tests)
 │   ├── seed.py                         # demo categories and products
 │   ├── docker-compose.yml              # PostgreSQL 17 container
 │   ├── requirements.txt
@@ -246,7 +247,7 @@ pip install -r requirements-dev.txt
 pytest -q
 ```
 
-The suite has 144 tests and runs in about a minute.
+The suite has 244 tests and runs in about two minutes.
 
 - It never touches the dev database. `tests/conftest.py` takes
   `DATABASE_URL`, replaces the database name with `dopaminestore_test` (or uses
@@ -264,7 +265,7 @@ The suite has 144 tests and runs in about a minute.
 | `test_orders_tracking.py` | own orders only, `compute_status` boundaries (29/30 s, 599/600 s, 7199/7200 s), tracking after shifting `created_at`, status never goes back |
 | `test_rbac_admin.py` | 401/403/200 on admin endpoints, product create/update/delete audit entries, deactivated product hidden from the catalog, log filters, `INVALID_DATE_RANGE`, analytics keys |
 | `test_audit_immutability.py` | direct `UPDATE`/`DELETE` on `audit_logs` fails; `ORDER_CREATED` is written once per idempotency key |
-| `test_chat.py` | DopaBot: 401/422, intent and language detection with priorities, replies with real balance, savings and latest order, read-only status, 24-hour rule, deterministic tips, suggestions, nothing written to the audit log |
+| `test_chat.py` | DopaBot: 401/422 (including an unsupported `lang`), English, Polish (with and without diacritics) and Ukrainian intent detection with priorities, language detection with the UI-language hint, Polish plural forms, replies with real balance, savings and latest order in every language, read-only status, 24-hour rule, deterministic tips, suggestions, nothing written to the audit log |
 | `test_balance_reset.py` | reset to 100 000, savings kept, `NOTHING_TO_RESET`, `BALANCE_RESET` audit entry |
 
 ## API
@@ -295,7 +296,7 @@ only. Without a token the API returns 401; with a wrong role it returns 403
 | GET | `/api/orders/track/{tracking_number}` | User | Parcel status and timeline of an own order. 404 `TRACKING_NOT_FOUND` |
 | GET | `/api/analytics/savings` | User | Savings dashboard data; `days` sets the chart window |
 | POST | `/api/users/me/balance/reset` | User | Reset balance to 100 000 DP. 409 `NOTHING_TO_RESET` |
-| POST | `/api/chat` | User | DopaBot rule-based chat: `{"message"}` (1–500 chars after trim) → `{"reply", "intent", "suggestions"}`. 422 for an empty or too long message |
+| POST | `/api/chat` | User | DopaBot rule-based chat: `{"message", "lang"}` (message 1–500 chars after trim; optional `lang`: `en`, `pl` or `uk`, the UI language) → `{"reply", "intent", "suggestions"}`. 422 for an empty or too long message or another `lang` |
 | GET | `/api/admin/products` | Admin | All products incl. inactive; `q`, `is_active`, pagination |
 | POST | `/api/admin/products` | Admin | Create a product (audited: `PRODUCT_CREATED`) |
 | PATCH | `/api/admin/products/{product_id}` | Admin | Partial update; only changed fields are audited (`PRODUCT_UPDATED`) |
@@ -405,7 +406,7 @@ than the stored one. The thresholds are constants at the top of
 
 ### Test suite with a race test
 
-144 pytest tests run against an isolated, automatically recreated test database
+244 pytest tests run against an isolated, automatically recreated test database
 (see [Tests](#tests)). Besides the happy paths and error codes, the suite
 includes a **concurrency test**. Two threads start a checkout at the same
 moment for the same user, each costing 60 000 DP of the 100 000 balance. The
@@ -418,18 +419,25 @@ confirm through real SQL that the audit log cannot be modified.
 DopaBot (`POST /api/chat`, `app/services/chat_service.py`) is deliberately
 **not** an AI: it uses no external AI or LLM services and needs no API keys.
 
-- `detect_intent` is a pure function. It matches Ukrainian and English
-  keywords and picks one of the intents `impulse`, `last_order`, `savings`,
-  `balance`, `tips`, `about`, `help`, `thanks` or `greeting` in that priority
-  order, or `unknown` if nothing matches. The reply is in Ukrainian if the
-  message contains Cyrillic, otherwise in English.
+- **Languages:** English, Polish and Ukrainian. `detect_intent` is a pure
+  function. It matches English, Polish and Ukrainian keywords and picks one of
+  the intents `impulse`, `last_order`, `savings`, `balance`, `tips`, `about`,
+  `help`, `thanks` or `greeting` in that priority order, or `unknown` if
+  nothing matches. Polish keywords are compared without diacritics, so
+  `chce kupic` works like `chcę kupić`.
+- **Reply language** (`detect_language`) follows the message: Cyrillic →
+  Ukrainian; Polish letters (`ąćęłńóśźż`) or a Polish keyword → Polish; an
+  English keyword → English. A neutral message such as `ok` gets the UI
+  language that the chat widget sends as `lang` (English if it is missing).
+  Words that are the same in English and Polish (`status`) do not decide the
+  language.
 - Replies use the current user's real data: balance (with a reset hint below
   10 000 DP), savings and order count, and the latest order with its tracking
   number, total, item count and computed status. Status is computed for
   display only, so the chat never writes to the database.
 - For impulse urges it asks three reflective questions and suggests the
-  24-hour rule. Tips come from a fixed list, chosen deterministically from the
-  message text.
+  24-hour rule. Tips come from a fixed list of 9 tips per language, chosen
+  deterministically from the message text.
 - **Privacy:** chat history is not stored on the server, not written to the
   audit log and messages are not logged. In the browser, the conversation
   lives only in the widget's state and disappears on page reload.
