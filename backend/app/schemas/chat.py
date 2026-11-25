@@ -1,14 +1,19 @@
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 MESSAGE_MAX_LENGTH = 500
 MAX_SUGGESTIONS = 3
 
 
-# Body of POST /api/chat; the message is stripped before the length check
+# Body of POST /api/chat; the message is stripped before the length check.
+# lang: the client's UI language, used for the reply when the message itself
+# does not show its language ("ok", "12345"); any other value gives 422.
 class ChatRequest(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     message: str = Field(min_length=1, max_length=MESSAGE_MAX_LENGTH)
+    lang: Literal["en", "pl", "uk"] | None = None
 
 
 # DopaBot answer: text, recognized intent and up to 3 follow-up prompts
