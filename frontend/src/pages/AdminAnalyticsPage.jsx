@@ -1,13 +1,14 @@
 // Admin "Analytics" screen: store totals, orders per day, orders by status, top products
 // and top categories from GET /api/admin/analytics
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import api from '../api'
 import ErrorState from '../components/ErrorState'
 import LoadingSkeleton from '../components/LoadingSkeleton'
 import SavingsChart from '../components/SavingsChart'
 import StatusBadge from '../components/StatusBadge'
-import { FORBIDDEN_MESSAGE, getErrorMessage, isForbidden } from '../utils/apiErrors'
-import { formatDp, toNumber } from '../utils/format'
+import { getErrorKey, isForbidden } from '../utils/apiErrors'
+import { formatDp, formatNumber, toNumber } from '../utils/format'
 import { ORDER_STEPS } from '../utils/orderStatus'
 import { cardClass } from '../utils/styles'
 
@@ -19,8 +20,9 @@ function percentOf(part, total) {
 }
 
 function AdminAnalyticsPage() {
+  const { t } = useTranslation()
   const [attempt, setAttempt] = useState(0)
-  // Last server answer together with the request key it belongs to
+  // Last server answer together with the request key it belongs to (error is a translation key)
   const [result, setResult] = useState({ key: null, stats: null, error: null, forbidden: false })
 
   const requestKey = JSON.stringify([DAYS, attempt])
@@ -43,7 +45,7 @@ function AdminAnalyticsPage() {
         setResult({
           key: requestKey,
           stats: null,
-          error: getErrorMessage(error, 'Could not load analytics'),
+          error: getErrorKey(error, 'admin.analytics.loadError'),
           forbidden: isForbidden(error),
         })
       })
@@ -54,7 +56,7 @@ function AdminAnalyticsPage() {
     }
   }, [requestKey])
 
-  const title = <h1 className="text-3xl font-bold mb-8">Analytics</h1>
+  const title = <h1 className="text-3xl font-bold mb-8">{t('admin.analytics.title')}</h1>
 
   if (isLoading) {
     return (
@@ -69,7 +71,7 @@ function AdminAnalyticsPage() {
     return (
       <>
         {title}
-        <ErrorState message={FORBIDDEN_MESSAGE} />
+        <ErrorState message={t('errors.FORBIDDEN')} />
       </>
     )
   }
@@ -78,31 +80,32 @@ function AdminAnalyticsPage() {
     return (
       <>
         {title}
-        <ErrorState message={result.error} onRetry={() => setAttempt((count) => count + 1)} />
+        <ErrorState message={t(result.error)} onRetry={() => setAttempt((count) => count + 1)} />
       </>
     )
   }
 
   const stats = result.stats
+  // `key` is the translation key of the label
   const cards = [
-    { label: 'Users', value: formatDp(toNumber(stats.users_count)) },
+    { key: 'admin.analytics.users', value: formatNumber(stats.users_count) },
     {
-      label: 'Orders',
-      value: formatDp(toNumber(stats.orders_count)),
-      note: `${formatDp(toNumber(stats.orders_in_period))} in the last ${DAYS} days`,
+      key: 'admin.analytics.orders',
+      value: formatNumber(stats.orders_count),
+      note: t('admin.analytics.valueInPeriod', { value: formatNumber(stats.orders_in_period), count: DAYS }),
     },
     {
-      label: 'Total volume',
-      value: `${formatDp(toNumber(stats.total_spent))} DP`,
-      note: `${formatDp(toNumber(stats.spent_in_period))} DP in the last ${DAYS} days`,
+      key: 'admin.analytics.totalVolume',
+      value: formatDp(stats.total_spent),
+      note: t('admin.analytics.valueInPeriod', { value: formatDp(stats.spent_in_period), count: DAYS }),
     },
     {
-      label: 'New users',
-      value: formatDp(toNumber(stats.new_users)),
-      note: `in the last ${DAYS} days`,
+      key: 'admin.analytics.newUsers',
+      value: formatNumber(stats.new_users),
+      note: t('admin.analytics.inPeriod', { count: DAYS }),
     },
-    { label: 'Average order', value: `${formatDp(toNumber(stats.average_order_value))} DP` },
-    { label: 'Active products', value: formatDp(toNumber(stats.active_products_count)) },
+    { key: 'admin.analytics.averageOrder', value: formatDp(stats.average_order_value) },
+    { key: 'admin.analytics.activeProducts', value: formatNumber(stats.active_products_count) },
   ]
 
   const ordersByStatus = stats.orders_by_status ?? {}
@@ -128,8 +131,8 @@ function AdminAnalyticsPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6">
         {cards.map((card) => (
-          <div key={card.label} className={cardClass}>
-            <p className="text-sm text-gray-600">{card.label}</p>
+          <div key={card.key} className={cardClass}>
+            <p className="text-sm text-gray-600">{t(card.key)}</p>
             <p className="mt-1 text-2xl font-bold break-words">{card.value}</p>
             {card.note && <p className="text-xs text-gray-600">{card.note}</p>}
           </div>
@@ -139,17 +142,17 @@ function AdminAnalyticsPage() {
       <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
         <section className={`${cardClass} lg:col-span-2 min-w-0`} aria-labelledby="chart-title">
           <h2 id="chart-title" className="text-xl font-bold mb-4">
-            Last {DAYS} days
+            {t('common.lastDays', { count: DAYS })}
           </h2>
-          <SavingsChart data={daily} label="Orders volume per day (DP)" />
+          <SavingsChart data={daily} label={t('admin.analytics.chartLabel')} />
         </section>
 
         <section className={cardClass} aria-labelledby="categories-title">
           <h2 id="categories-title" className="text-xl font-bold mb-4">
-            Top categories
+            {t('admin.analytics.topCategories')}
           </h2>
           {categories.length === 0 ? (
-            <p className="text-sm text-gray-600">No sales yet.</p>
+            <p className="text-sm text-gray-600">{t('admin.analytics.noSales')}</p>
           ) : (
             <ul className="flex flex-col gap-4">
               {categories.map((item) => {
@@ -157,9 +160,9 @@ function AdminAnalyticsPage() {
                 return (
                   <li key={item.slug} className="flex flex-col gap-1 text-sm">
                     <div className="flex justify-between gap-4">
-                      <span className="font-medium">{item.name}</span>
+                      <span className="font-medium min-w-0 break-words">{item.name}</span>
                       <span className="text-gray-600 whitespace-nowrap">
-                        {formatDp(item.revenue)} DP · {percent}%
+                        {formatDp(item.revenue)} · {percent}%
                       </span>
                     </div>
                     <div className="h-2 rounded-full bg-gray-200" aria-hidden="true">
@@ -168,7 +171,7 @@ function AdminAnalyticsPage() {
                         style={{ width: `${percent}%` }}
                       />
                     </div>
-                    <span className="text-xs text-gray-600">{item.itemsCount} sold</span>
+                    <span className="text-xs text-gray-600">{t('admin.analytics.sold', { count: item.itemsCount })}</span>
                   </li>
                 )
               })}
@@ -180,7 +183,7 @@ function AdminAnalyticsPage() {
       <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
         <section className={cardClass} aria-labelledby="status-title">
           <h2 id="status-title" className="text-xl font-bold mb-4">
-            Orders by status
+            {t('admin.analytics.ordersByStatus')}
           </h2>
           <ul className="flex flex-col gap-4">
             {ORDER_STEPS.map((step, index) => {
@@ -208,10 +211,10 @@ function AdminAnalyticsPage() {
 
         <section className={cardClass} aria-labelledby="top-title">
           <h2 id="top-title" className="text-xl font-bold mb-4">
-            Top products
+            {t('admin.analytics.topProducts')}
           </h2>
           {topProducts.length === 0 ? (
-            <p className="text-sm text-gray-600">No sales yet.</p>
+            <p className="text-sm text-gray-600">{t('admin.analytics.noSales')}</p>
           ) : (
             <ol className="flex flex-col">
               {topProducts.map((product, index) => (
@@ -223,10 +226,10 @@ function AdminAnalyticsPage() {
                   <span className="flex-1 min-w-0 font-medium break-words">{product.title}</span>
                   <span className="text-right whitespace-nowrap">
                     <span className="block font-semibold">
-                      {formatDp(toNumber(product.revenue))} DP
+                      {formatDp(product.revenue)}
                     </span>
                     <span className="block text-xs text-gray-600">
-                      {toNumber(product.quantity)} sold
+                      {t('admin.analytics.sold', { count: toNumber(product.quantity) })}
                     </span>
                   </span>
                 </li>

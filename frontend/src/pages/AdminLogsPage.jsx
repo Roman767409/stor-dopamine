@@ -1,11 +1,12 @@
 // Admin "Logs" screen: audit log from GET /api/admin/logs with filters, pagination
 // and an expandable details payload
 import { Fragment, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import api from '../api'
 import EmptyState from '../components/EmptyState'
 import ErrorState from '../components/ErrorState'
 import LoadingSkeleton from '../components/LoadingSkeleton'
-import { FORBIDDEN_MESSAGE, getApiError, getErrorMessage, isForbidden } from '../utils/apiErrors'
+import { getErrorKey, isForbidden } from '../utils/apiErrors'
 import { formatLocalDateTime } from '../utils/format'
 import { btnSmall, errorClass, inputClass, labelClass } from '../utils/styles'
 
@@ -37,6 +38,7 @@ function entityLabel(log) {
 }
 
 function AdminLogsPage() {
+  const { t } = useTranslation()
   const [filters, setFilters] = useState(EMPTY_FILTERS)
   const [actor, setActor] = useState('')
   // Actor text that actually went into the request (updated after a pause in typing)
@@ -44,6 +46,7 @@ function AdminLogsPage() {
   const [page, setPage] = useState(1)
   const [attempt, setAttempt] = useState(0)
   // Last server answer together with the request key it belongs to
+  // (error and filterError are translation keys)
   const [result, setResult] = useState({
     key: null,
     items: [],
@@ -111,17 +114,13 @@ function AdminLogsPage() {
         if (isForbidden(error)) setForbidden(true)
         // Invalid filter values (e.g. INVALID_DATE_RANGE) are shown next to the filters
         const isFilterError = error.response?.status === 422
-        const message = getErrorMessage(error, 'Could not load logs')
+        const errorKey = getErrorKey(error, 'admin.logs.loadError')
         setResult({
           key: requestKey,
           items: [],
           total: 0,
-          error: isFilterError ? null : message,
-          filterError: isFilterError
-            ? getApiError(error)?.code === 'INVALID_DATE_RANGE'
-              ? '"From" date must not be later than "To" date'
-              : message
-            : null,
+          error: isFilterError ? null : errorKey,
+          filterError: isFilterError ? errorKey : null,
         })
       })
 
@@ -146,8 +145,8 @@ function AdminLogsPage() {
   if (forbidden) {
     return (
       <>
-        <h1 className="text-3xl font-bold mb-8">Logs</h1>
-        <ErrorState message={FORBIDDEN_MESSAGE} />
+        <h1 className="text-3xl font-bold mb-8">{t('admin.logs.title')}</h1>
+        <ErrorState message={t('errors.FORBIDDEN')} />
       </>
     )
   }
@@ -157,12 +156,12 @@ function AdminLogsPage() {
 
   return (
     <>
-      <h1 className="text-3xl font-bold mb-8">Logs</h1>
+      <h1 className="text-3xl font-bold mb-8">{t('admin.logs.title')}</h1>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8 max-w-2xl">
         <div className="flex flex-col gap-1">
           <label htmlFor="logs-action" className={labelClass}>
-            Action type
+            {t('admin.logs.actionType')}
           </label>
           <select
             id="logs-action"
@@ -170,7 +169,7 @@ function AdminLogsPage() {
             onChange={(event) => updateFilter('action', event.target.value)}
             className={inputClass}
           >
-            <option value="">All actions</option>
+            <option value="">{t('admin.logs.allActions')}</option>
             {actions.map((type) => (
               <option key={type} value={type}>
                 {type}
@@ -180,7 +179,7 @@ function AdminLogsPage() {
         </div>
         <div className="flex flex-col gap-1">
           <label htmlFor="logs-search" className={labelClass}>
-            User email
+            {t('admin.logs.userEmail')}
           </label>
           <input
             id="logs-search"
@@ -194,7 +193,7 @@ function AdminLogsPage() {
         </div>
         <div className="flex flex-col gap-1">
           <label htmlFor="logs-date-from" className={labelClass}>
-            From
+            {t('admin.logs.from')}
           </label>
           <input
             id="logs-date-from"
@@ -207,7 +206,7 @@ function AdminLogsPage() {
         </div>
         <div className="flex flex-col gap-1">
           <label htmlFor="logs-date-to" className={labelClass}>
-            To
+            {t('admin.logs.to')}
           </label>
           <input
             id="logs-date-to"
@@ -220,7 +219,7 @@ function AdminLogsPage() {
         </div>
         {!isLoading && filterError && (
           <p role="alert" className={`sm:col-span-2 ${errorClass}`}>
-            {filterError}
+            {t(filterError)}
           </p>
         )}
       </div>
@@ -228,14 +227,14 @@ function AdminLogsPage() {
       {isLoading && <LoadingSkeleton variant="list" />}
 
       {!isLoading && error && (
-        <ErrorState message={error} onRetry={() => setAttempt((value) => value + 1)} />
+        <ErrorState message={t(error)} onRetry={() => setAttempt((value) => value + 1)} />
       )}
 
       {!isLoading && !error && logs.length === 0 && (
         <EmptyState
-          title="No logs found"
-          text={hasFilters ? 'Try another action type, email or dates.' : undefined}
-          actionLabel={hasFilters ? 'Reset filters' : undefined}
+          title={t('admin.logs.emptyTitle')}
+          text={hasFilters ? t('admin.logs.emptyText') : undefined}
+          actionLabel={hasFilters ? t('common.resetFilters') : undefined}
           onAction={hasFilters ? resetFilters : undefined}
         />
       )}
@@ -246,19 +245,19 @@ function AdminLogsPage() {
             <thead className="border-b border-gray-200 text-xs text-gray-600">
               <tr>
                 <th scope="col" className="hidden sm:table-cell py-3 pr-4 font-medium">
-                  Time
+                  {t('admin.logs.time')}
                 </th>
                 <th scope="col" className="py-3 pr-4 sm:px-2 font-medium">
-                  User
+                  {t('admin.logs.user')}
                 </th>
                 <th scope="col" className="py-3 px-2 font-medium">
-                  Action
+                  {t('admin.logs.action')}
                 </th>
                 <th scope="col" className="hidden lg:table-cell py-3 px-2 font-medium">
-                  Request ID
+                  {t('admin.logs.requestId')}
                 </th>
                 <th scope="col" className="py-3 pl-2 font-medium text-right">
-                  <span className="sr-only">Details</span>
+                  <span className="sr-only">{t('admin.logs.details')}</span>
                 </th>
               </tr>
             </thead>
@@ -310,7 +309,7 @@ function AdminLogsPage() {
                           onClick={() => setExpandedId(isExpanded ? null : log.id)}
                           className={btnSmall}
                         >
-                          {isExpanded ? 'Hide' : 'Show'}
+                          {isExpanded ? t('admin.logs.hide') : t('admin.logs.show')}
                         </button>
                       </td>
                     </tr>
@@ -318,13 +317,13 @@ function AdminLogsPage() {
                       <tr className="border-b border-gray-200">
                         <td colSpan={5} className="pb-4">
                           <p className="text-xs text-gray-600 mb-2 lg:hidden break-all">
-                            Request ID: {log.request_id || '—'}
+                            {t('admin.logs.requestIdValue', { id: log.request_id || '—' })}
                           </p>
                           <pre
                             id={detailsId}
                             className="bg-gray-100 rounded-xl p-4 text-xs whitespace-pre-wrap break-all"
                           >
-                            {hasDetails ? fullDetails : 'No details'}
+                            {hasDetails ? fullDetails : t('admin.logs.noDetails')}
                           </pre>
                         </td>
                       </tr>
@@ -336,17 +335,17 @@ function AdminLogsPage() {
           </table>
 
           {totalPages > 1 && (
-            <nav aria-label="Pagination" className="mt-10 flex items-center justify-center gap-4">
+            <nav aria-label={t('common.pagination')} className="mt-10 flex items-center justify-center gap-4">
               <button
                 type="button"
                 onClick={() => setPage(page - 1)}
                 disabled={page <= 1}
                 className={btnSmall}
               >
-                Previous
+                {t('common.previous')}
               </button>
               <span className="text-sm font-medium">
-                Page {page} of {totalPages}
+                {t('common.pageOf', { page, total: totalPages })}
               </span>
               <button
                 type="button"
@@ -354,7 +353,7 @@ function AdminLogsPage() {
                 disabled={page >= totalPages}
                 className={btnSmall}
               >
-                Next
+                {t('common.next')}
               </button>
             </nav>
           )}

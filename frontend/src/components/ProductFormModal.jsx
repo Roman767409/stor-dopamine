@@ -1,5 +1,6 @@
 // Admin modal form for adding or editing a product; the parent sends the request
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import FormField from './FormField'
 import Modal from './Modal'
 import { btnPrimary, btnSecondary, errorClass, focusRing } from '../utils/styles'
@@ -12,7 +13,9 @@ const PRICE_PATTERN = /^\d{1,10}(\.\d{1,2})?$/
 
 // categories: [{ id, name, slug }] from GET /api/categories;
 // isSaving disables the buttons, serverError is shown above them
+// serverError is already translated by the parent
 function ProductFormModal({ product, categories, isSaving, serverError, onSave, onCancel }) {
+  const { t } = useTranslation()
   const [values, setValues] = useState(() => ({
     title: product?.title ?? '',
     description: product?.description ?? '',
@@ -21,6 +24,7 @@ function ProductFormModal({ product, categories, isSaving, serverError, onSave, 
     image_url: product?.image_url ?? '',
     is_active: product?.is_active ?? true,
   }))
+  // Field errors as [translationKey, options], translated while rendering
   const [errors, setErrors] = useState({})
 
   function update(name, value) {
@@ -29,20 +33,20 @@ function ProductFormModal({ product, categories, isSaving, serverError, onSave, 
 
   function validate() {
     const nextErrors = {}
-    if (values.title.trim() === '') nextErrors.title = 'Enter a title'
+    if (values.title.trim() === '') nextErrors.title = ['admin.products.form.titleRequired']
     else if (values.title.trim().length > TITLE_MAX_LENGTH) {
-      nextErrors.title = `Max ${TITLE_MAX_LENGTH} characters`
+      nextErrors.title = ['admin.products.form.maxLength', { count: TITLE_MAX_LENGTH }]
     }
-    if (!values.category_id) nextErrors.category_id = 'Choose a category'
+    if (!values.category_id) nextErrors.category_id = ['admin.products.form.categoryRequired']
     const price = values.price.trim()
     if (!PRICE_PATTERN.test(price) || Number(price) <= 0) {
-      nextErrors.price = 'Price must be greater than 0, with at most 2 decimal places'
+      nextErrors.price = ['admin.products.form.priceInvalid']
     }
     const imageUrl = values.image_url.trim()
     if (imageUrl && !/^https?:\/\//.test(imageUrl)) {
-      nextErrors.image_url = 'URL must start with http:// or https://'
+      nextErrors.image_url = ['admin.products.form.urlInvalid']
     } else if (imageUrl.length > IMAGE_URL_MAX_LENGTH) {
-      nextErrors.image_url = `Max ${IMAGE_URL_MAX_LENGTH} characters`
+      nextErrors.image_url = ['admin.products.form.maxLength', { count: IMAGE_URL_MAX_LENGTH }]
     }
     return nextErrors
   }
@@ -64,19 +68,24 @@ function ProductFormModal({ product, categories, isSaving, serverError, onSave, 
     })
   }
 
+  function errorText(name) {
+    const error = errors[name]
+    return error ? t(error[0], error[1]) : undefined
+  }
+
   return (
-    <Modal title={product ? 'Edit product' : 'Add product'} onClose={onCancel}>
+    <Modal title={product ? t('admin.products.form.editTitle') : t('admin.products.form.addTitle')} onClose={onCancel}>
       <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
         <FormField
           id="product-title"
-          label="Title"
+          label={t('admin.products.form.title')}
           value={values.title}
-          error={errors.title}
+          error={errorText('title')}
           onChange={(event) => update('title', event.target.value)}
         />
         <FormField
           id="product-description"
-          label="Description"
+          label={t('admin.products.form.description')}
           as="textarea"
           rows={3}
           value={values.description}
@@ -85,10 +94,10 @@ function ProductFormModal({ product, categories, isSaving, serverError, onSave, 
         <div className="grid grid-cols-2 gap-5">
           <FormField
             id="product-category"
-            label="Category"
+            label={t('admin.products.form.category')}
             as="select"
             value={values.category_id}
-            error={errors.category_id}
+            error={errorText('category_id')}
             onChange={(event) => update('category_id', event.target.value)}
           >
             {categories.map((category) => (
@@ -99,23 +108,23 @@ function ProductFormModal({ product, categories, isSaving, serverError, onSave, 
           </FormField>
           <FormField
             id="product-price"
-            label="Price, DP"
+            label={t('admin.products.form.price')}
             type="number"
             min="0"
             step="0.01"
             inputMode="decimal"
             value={values.price}
-            error={errors.price}
+            error={errorText('price')}
             onChange={(event) => update('price', event.target.value)}
           />
         </div>
         <FormField
           id="product-image"
-          label="Image URL"
+          label={t('admin.products.form.imageUrl')}
           type="url"
           placeholder="https://…"
           value={values.image_url}
-          error={errors.image_url}
+          error={errorText('image_url')}
           onChange={(event) => update('image_url', event.target.value)}
         />
         <label className="flex items-center gap-2 text-sm">
@@ -125,7 +134,7 @@ function ProductFormModal({ product, categories, isSaving, serverError, onSave, 
             onChange={(event) => update('is_active', event.target.checked)}
             className={`w-4 h-4 accent-gray-900 ${focusRing}`}
           />
-          Active (visible in the shop)
+          {t('admin.products.form.isActive')}
         </label>
 
         {serverError && (
@@ -136,10 +145,10 @@ function ProductFormModal({ product, categories, isSaving, serverError, onSave, 
 
         <div className="mt-2 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
           <button type="button" onClick={onCancel} disabled={isSaving} className={btnSecondary}>
-            Cancel
+            {t('common.cancel')}
           </button>
           <button type="submit" disabled={isSaving} className={btnPrimary}>
-            {product ? 'Save changes' : 'Add product'}
+            {product ? t('admin.products.form.save') : t('admin.products.add')}
           </button>
         </div>
       </form>
