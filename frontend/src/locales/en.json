@@ -340,7 +340,7 @@
     "dialogLabel": "DopaBot chat",
     "close": "Close chat",
     "messages": "Chat messages",
-    "greeting": "Hi! I'm DopaBot. I'm a simple rule-based helper, not an AI: I can show your DP balance, your savings and the status of your latest parcel, and give tips against impulse buying.",
+    "greeting": "Hi! I'm DopaBot. I'm a simple rule-based helper, not an AI: I can show your DP balance, your savings and the status of your latest parcel, and give tips against impulse buying. I understand English, Polish and Ukrainian.",
     "suggestions": {
       "balance": "What's my balance?",
       "parcel": "Where is my parcel?",

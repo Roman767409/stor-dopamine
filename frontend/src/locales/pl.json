@@ -358,11 +358,11 @@
     "dialogLabel": "Czat z DopaBotem",
     "close": "Zamknij czat",
     "messages": "Wiadomości czatu",
-    "greeting": "Cześć! Jestem DopaBot, prosty pomocnik działający według reguł, a nie AI. Pokażę Twoje saldo DP, oszczędności i status ostatniej przesyłki, a do tego podpowiem, jak nie ulegać impulsywnym zakupom. Na razie odpowiadam po angielsku i ukraińsku.",
+    "greeting": "Cześć! Jestem DopaBot, prosty pomocnik działający według reguł, a nie AI. Pokażę Twoje saldo DP, oszczędności i status ostatniej przesyłki, a do tego podpowiem, jak nie ulegać impulsywnym zakupom. Rozumiem po polsku, angielsku i ukraińsku.",
     "suggestions": {
       "balance": "Jakie mam saldo?",
       "parcel": "Gdzie jest moja przesyłka?",
-      "tip": "Daj mi radę"
+      "tip": "Daj mi poradę"
     },
     "ask": "Zapytaj DopaBota: {{text}}",
     "typing": "DopaBot pisze…",

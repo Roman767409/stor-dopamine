@@ -1,6 +1,7 @@
 // DopaBot: floating chat assistant backed by POST /api/chat (rule-based, no AI).
 // The conversation lives only in component state and is lost on page reload.
-// Interface texts follow the UI language; the bot's replies come from the backend as they are.
+// Interface texts follow the UI language. The bot answers in the language of the message
+// (English, Polish or Ukrainian); for a neutral message it uses the UI language sent as `lang`.
 import { Fragment, useEffect, useRef, useState } from 'react'
 import axios from 'axios'
 import { useTranslation } from 'react-i18next'
@@ -12,15 +13,11 @@ import { focusRing } from '../utils/styles'
 const MAX_LENGTH = 500
 const COUNTER_THRESHOLD = 50
 
-// Starting quick replies. The button shows the label in the UI language, but the message
-// sent to the bot is the canonical English phrase, because the backend recognizes intents
-// only in English and Ukrainian and answers in Ukrainian only for Cyrillic text.
-// TEMPORARY LIMITATION: Polish support for the bot will be added separately; until then
-// these buttons always send English and get an English reply.
+// Starting quick replies: the button sends exactly the text it shows, in the UI language
 const INITIAL_SUGGESTIONS = [
-  { labelKey: 'chat.suggestions.balance', message: "What's my balance?" },
-  { labelKey: 'chat.suggestions.parcel', message: 'Where is my parcel?' },
-  { labelKey: 'chat.suggestions.tip', message: 'Give me a tip' },
+  { labelKey: 'chat.suggestions.balance' },
+  { labelKey: 'chat.suggestions.parcel' },
+  { labelKey: 'chat.suggestions.tip' },
 ]
 
 // Translation keys of the error kinds
@@ -47,7 +44,7 @@ function errorKind(error) {
 }
 
 function ChatWidget() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { user, isLoading } = useAuth()
   const userId = user?.id ?? null
   const [isOpen, setIsOpen] = useState(false)
@@ -113,15 +110,14 @@ function ChatWidget() {
     toggleRef.current?.focus()
   }
 
-  // Sends the text to the API; `isRetry` resends without adding the user bubble again.
-  // `display` is the bubble text when it differs from what is sent (translated quick reply).
-  async function send(text, { isRetry = false, display } = {}) {
+  // Sends the text to the API; `isRetry` resends without adding the user bubble again
+  async function send(text, { isRetry = false } = {}) {
     const trimmed = text.trim()
     if (!trimmed || trimmed.length > MAX_LENGTH || !user || sendingRef.current) return
     sendingRef.current = true
 
     if (!isRetry) {
-      addMessage({ from: 'user', text: display ?? trimmed })
+      addMessage({ from: 'user', text: trimmed })
       setDraft('')
     }
     setError(null)
@@ -132,12 +128,13 @@ function ChatWidget() {
     try {
       const { data } = await api.post(
         '/api/chat',
-        { message: trimmed },
+        // lang: the UI language, used by the bot only when the message is neutral ("ok")
+        { message: trimmed, lang: i18n.resolvedLanguage },
         { signal: controller.signal }
       )
-      // Suggestions from the bot are already in the reply's language: label = message
+      // Suggestions from the bot are already in the reply's language
       const suggestions = Array.isArray(data.suggestions)
-        ? data.suggestions.slice(0, 3).map((suggestion) => ({ label: suggestion, message: suggestion }))
+        ? data.suggestions.slice(0, 3).map((suggestion) => ({ label: suggestion }))
         : []
       addMessage({ from: 'bot', text: data.reply, suggestions })
     } catch (requestError) {
@@ -214,10 +211,10 @@ function ChatWidget() {
                       const label = suggestion.labelKey ? t(suggestion.labelKey) : suggestion.label
                       return (
                         <button
-                          key={suggestion.message}
+                          key={label}
                           type="button"
                           aria-label={t('chat.ask', { text: label })}
-                          onClick={() => send(suggestion.message, { display: label })}
+                          onClick={() => send(label)}
                           disabled={isTyping}
                           className={smallButton}
                         >
