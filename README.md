@@ -32,6 +32,13 @@ A presentation script is in [docs/DEMO.md](docs/DEMO.md).
 - Catalog with search by title, category filter, price range, sorting and
   pagination.
 - Product page and a client-side cart (stored in `localStorage` per user).
+- Multi-language UI (English default, Polish, Ukrainian): an EN / PL / UA
+  switch in the header (and in the mobile menu), the choice is kept in
+  `localStorage`; dates and numbers follow the selected language.
+- Favorites: a heart on product cards and the product page, a counter in the
+  header and a `/favorites` page. The list is stored in the browser
+  (`localStorage`) separately for each user; deleted or deactivated products
+  are removed from it automatically.
 - Checkout with a shipping address. The test card form is client-side only;
   no card data is sent to the backend. Orders are idempotent through the
   `Idempotency-Key` header.
@@ -62,7 +69,7 @@ A presentation script is in [docs/DEMO.md](docs/DEMO.md).
 
 | Layer | Technology |
 | --- | --- |
-| Frontend | React 19, Vite, Tailwind CSS v4, React Router 7, Axios |
+| Frontend | React 19, Vite, Tailwind CSS v4, React Router 7, Axios, i18next + react-i18next |
 | Backend | Python 3.12, FastAPI, SQLAlchemy 2, Alembic, Pydantic |
 | Auth | PyJWT (HS256 access tokens), bcrypt password hashing |
 | Database | PostgreSQL 17 in Docker (`docker-compose.yml`) |
@@ -131,10 +138,13 @@ stor_dopamine/
     ├── src/
     │   ├── api.js                      # Axios client, token refresh on 401
     │   ├── App.jsx                     # routes
-    │   ├── context/                    # AuthContext, CartContext
+    │   ├── context/                    # AuthContext, CartContext, FavoritesContext
+│   ├── i18n/                       # i18next setup (default language, saved choice)
+│   ├── locales/                    # en.json, pl.json, uk.json translations
     │   ├── pages/                      # shop, checkout, tracking, dashboard, admin…
     │   ├── components/
     │   └── mocks/                      # legacy mock data, no longer used by the app
+    ├── scripts/check-i18n.mjs          # npm run check:i18n: same keys in every language
     ├── package.json
     └── vite.config.js
 ```

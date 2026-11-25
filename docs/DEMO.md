@@ -78,12 +78,19 @@ Passwords need at least 8 characters with a letter and a digit. If
 through the whole buying experience with virtual Dopamine Points. Every
 purchase counts as real money saved."
 
+**Language (≈ 15 s):** In the header, click **PL**, then **UA**, then back to
+**EN** (on a phone the switch is in the ☰ menu). The whole interface changes
+at once, without a reload, and amounts follow the language (`100,000 DP` in
+English, `100 000 DP` in Polish and Ukrainian). Reload the page: the chosen
+language stays. Product and category names come from the database and are
+not translated. Continue the demo in English.
+
 ### 2. Registration (≈ 40 s)
 
 **Do:** Go to **Login → register**, enter `demo@test.com` / `Demo12345`.
 
 **Expect:** You are signed in, and the header shows the balance
-**100 000 DP**.
+**100,000 DP**.
 
 **Optional:** Register the same email in upper case (`DEMO@TEST.COM`). The
 form shows that the email is already registered, because emails are unique
@@ -166,9 +173,9 @@ anywhere: reload the page and it is gone."
 
 ### 9. Balance reset (≈ 30 s)
 
-**Do:** Open **Profile → Reset your balance to 100 000 DP?** and confirm.
+**Do:** Open **Profile → Reset balance to 100,000 DP** and confirm.
 
-**Expect:** The balance returns to **100 000 DP**, while total saved stays
+**Expect:** The balance returns to **100,000 DP**, while total saved stays
 the same. Resetting again is refused because the balance is already at the
 starting amount (`NOTHING_TO_RESET`).
 
