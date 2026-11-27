@@ -33,6 +33,8 @@ class Category(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(80), nullable=False, unique=True)
     slug: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    # Translations {"en", "pl", "uk"}; name is the fallback text
+    name_i18n: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     products: Mapped[list[Product]] = relationship(back_populates="category")
 
@@ -88,6 +90,9 @@ class Product(Base):
     )
     title: Mapped[str] = mapped_column(String(120), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    # Translations {"en", "pl", "uk"}; title and description are the fallback texts
+    title_i18n: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    description_i18n: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_active: Mapped[bool] = mapped_column(
