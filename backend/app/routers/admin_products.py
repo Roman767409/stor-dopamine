@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import require_role
 from app.core.errors import get_request_id
+from app.core.lang import get_lang
 from app.database import get_db
 from app.models import User
 from app.schemas.admin_products import (
@@ -29,8 +30,11 @@ def list_products(
     is_active: bool | None = Query(None),
     db: Session = Depends(get_db),
     _admin: User = Depends(require_admin),
+    lang: str = Depends(get_lang),
 ):
-    return admin_product_service.list_products(db, page, page_size, q, is_active)
+    return admin_product_service.list_products(
+        db, page, page_size, q, is_active, lang
+    )
 
 
 @router.post("/products", status_code=201, response_model=AdminProductOut)
@@ -39,9 +43,10 @@ def create_product(
     request: Request,
     db: Session = Depends(get_db),
     admin: User = Depends(require_admin),
+    lang: str = Depends(get_lang),
 ):
     return admin_product_service.create_product(
-        db, body, admin, get_request_id(request)
+        db, body, admin, get_request_id(request), lang
     )
 
 
@@ -52,9 +57,10 @@ def update_product(
     request: Request,
     db: Session = Depends(get_db),
     admin: User = Depends(require_admin),
+    lang: str = Depends(get_lang),
 ):
     return admin_product_service.update_product(
-        db, product_id, body, admin, get_request_id(request)
+        db, product_id, body, admin, get_request_id(request), lang
     )
 
 
