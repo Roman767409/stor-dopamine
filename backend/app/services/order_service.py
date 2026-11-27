@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.lang import DEFAULT_LANG, localized
 from app.models import Order, User
 from app.repositories import order_repository
 from app.schemas.orders import CreateOrderRequest
@@ -191,8 +192,11 @@ def list_orders(db: Session, user_id: uuid.UUID, page: int, page_size: int) -> d
     }
 
 
-# Details of one order; 404 for missing and foreign orders alike
-def get_order(db: Session, user_id: uuid.UUID, order_id: uuid.UUID) -> dict:
+# Details of one order; 404 for missing and foreign orders alike.
+# Line titles are in the request language.
+def get_order(
+    db: Session, user_id: uuid.UUID, order_id: uuid.UUID, lang: str = DEFAULT_LANG
+) -> dict:
     order = order_repository.get_user_order_with_items(db, user_id, order_id)
     if order is None:
         raise HTTPException(
@@ -204,8 +208,14 @@ def get_order(db: Session, user_id: uuid.UUID, order_id: uuid.UUID) -> dict:
         order.status, order.created_at, tracking_service.utc_now()
     )
 
-    # Sort lines by title so the response order is deterministic
-    lines = sorted(order.items, key=lambda item: item.product.title)
+    # Sort lines by the shown title so the response order is deterministic
+    titled_lines = sorted(
+        (
+            (localized(item.product.title_i18n, item.product.title, lang), item)
+            for item in order.items
+        ),
+        key=lambda pair: (pair[0], str(pair[1].product_id)),
+    )
     result = {
         "order_id": str(order.id),
         "tracking_number": order.tracking_number,
@@ -216,14 +226,14 @@ def get_order(db: Session, user_id: uuid.UUID, order_id: uuid.UUID) -> dict:
         "items": [
             {
                 "product_id": str(item.product_id),
-                "title": item.product.title,
+                "title": title,
                 "quantity": item.quantity,
                 "price_at_purchase": float(item.price_at_purchase),
                 "line_total": float(
                     (item.price_at_purchase * item.quantity).quantize(Decimal("0.01"))
                 ),
             }
-            for item in lines
+            for title, item in titled_lines
         ],
     }
     # Commit after the response is built: commit expires the loaded objects

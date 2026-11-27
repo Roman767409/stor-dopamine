@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.auth import require_role
+from app.core.lang import get_lang
 from app.database import get_db
 from app.models import User
 from app.schemas.admin_analytics import AdminAnalyticsResponse
@@ -18,5 +19,6 @@ def get_analytics(
     days: int = Query(30, ge=1, le=365),
     db: Session = Depends(get_db),
     _admin: User = Depends(require_admin),
+    lang: str = Depends(get_lang),
 ):
-    return admin_analytics_service.get_analytics(db, days)
+    return admin_analytics_service.get_analytics(db, days, lang)

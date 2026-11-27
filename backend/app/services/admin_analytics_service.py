@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
+from app.core.lang import DEFAULT_LANG, localized
 from app.repositories import admin_analytics_repository
 from app.services import tracking_service
 
@@ -19,7 +20,8 @@ def _utc_midnight(day: date) -> datetime:
 
 # Store-wide statistics. The period is the last `days` UTC days including today,
 # so the *_in_period values match the sums of by_day.
-def get_analytics(db: Session, days: int) -> dict:
+# Product titles and category names are in the request language.
+def get_analytics(db: Session, days: int, lang: str = DEFAULT_LANG) -> dict:
     now = tracking_service.utc_now()
     today = now.date()
     first_day = today - timedelta(days=days - 1)
@@ -49,7 +51,7 @@ def get_analytics(db: Session, days: int) -> dict:
         "top_products": [
             {
                 "product_id": row.product_id,
-                "title": row.title,
+                "title": localized(row.title_i18n, row.title, lang),
                 "quantity": int(row.quantity),
                 "sold": int(row.quantity),
                 "revenue": _money(row.revenue),
@@ -58,7 +60,7 @@ def get_analytics(db: Session, days: int) -> dict:
         ],
         "top_categories": [
             {
-                "category": row.category,
+                "category": localized(row.category_i18n, row.category, lang),
                 "slug": row.slug,
                 "revenue": _money(row.revenue),
                 "items_count": int(row.items_count),

@@ -1,16 +1,25 @@
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.lang import DEFAULT_LANG, SUPPORTED_LANGS, localized_sql
 from app.models import Category, Product
 
-SORT_ORDERS = {
-    "price_asc": (Product.price.asc(), Product.id.asc()),
-    "price_desc": (Product.price.desc(), Product.id.asc()),
-    "title_asc": (Product.title.asc(), Product.id.asc()),
-    "newest": (Product.created_at.desc(), Product.id.asc()),
-}
+
+# ORDER BY clauses for the catalog; title_asc sorts by the title in the request language
+def _sort_order(sort: str, lang: str) -> tuple:
+    if sort == "price_asc":
+        return (Product.price.asc(), Product.id.asc())
+    if sort == "price_desc":
+        return (Product.price.desc(), Product.id.asc())
+    if sort == "newest":
+        return (Product.created_at.desc(), Product.id.asc())
+    # title_asc (default)
+    return (
+        localized_sql(Product.title_i18n, Product.title, lang).asc(),
+        Product.id.asc(),
+    )
 
 
 # Усі активні товари разом із категорією, відсортовані за назвою
@@ -32,6 +41,19 @@ def _escape_like(text: str) -> str:
     return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
+# Case-insensitive substring match on the base title and on every translation,
+# so "headphones", "słuchawki" and "навушники" find the same product
+def _title_matches(q: str):
+    pattern = f"%{_escape_like(q)}%"
+    return or_(
+        Product.title.ilike(pattern, escape="\\"),
+        *(
+            Product.title_i18n[lang].astext.ilike(pattern, escape="\\")
+            for lang in SUPPORTED_LANGS
+        ),
+    )
+
+
 # Сторінка активних товарів за фільтрами + загальна кількість знайдених
 def search_active(
     db: Session,
@@ -43,12 +65,13 @@ def search_active(
     min_price: float | None = None,
     max_price: float | None = None,
     sort: str = "title_asc",
+    lang: str = DEFAULT_LANG,
 ) -> tuple[list[Product], int]:
     filters = [Product.is_active.is_(True)]
     if category_slug is not None:
         filters.append(Category.slug == category_slug)
     if q is not None:
-        filters.append(Product.title.ilike(f"%{_escape_like(q)}%", escape="\\"))
+        filters.append(_title_matches(q))
     if min_price is not None:
         filters.append(Product.price >= min_price)
     if max_price is not None:
@@ -64,7 +87,7 @@ def search_active(
     items = (
         db.scalars(
             items_query.where(*filters)
-            .order_by(*SORT_ORDERS[sort])
+            .order_by(*_sort_order(sort, lang))
             .offset((page - 1) * page_size)
             .limit(page_size)
         )
@@ -98,7 +121,7 @@ def search_all(
 ) -> tuple[list[Product], int]:
     filters = []
     if q:
-        filters.append(Product.title.ilike(f"%{_escape_like(q)}%", escape="\\"))
+        filters.append(_title_matches(q))
     if is_active is not None:
         filters.append(Product.is_active.is_(is_active))
 

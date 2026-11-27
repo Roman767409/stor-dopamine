@@ -4,6 +4,7 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.core.constants import STARTING_BALANCE
+from app.core.lang import DEFAULT_LANG, localized
 from app.models import User
 from app.repositories import analytics_repository
 
@@ -17,8 +18,9 @@ def _utc_midnight(day: date) -> datetime:
     return datetime.combine(day, time.min, tzinfo=timezone.utc)
 
 
-# Savings dashboard data for the user; `days` is the by_day window ending today (UTC)
-def get_savings(db: Session, user: User, days: int) -> dict:
+# Savings dashboard data for the user; `days` is the by_day window ending today (UTC).
+# Category names are in the request language.
+def get_savings(db: Session, user: User, days: int, lang: str = DEFAULT_LANG) -> dict:
     today = datetime.now(timezone.utc).date()
     window_first_day = today - timedelta(days=days - 1)
     # "Last 7 days" = today and the 6 days before it; the previous week is the 7 days before that
@@ -47,7 +49,7 @@ def get_savings(db: Session, user: User, days: int) -> dict:
         "previous_week_total": _money(summary.previous_week_total),
         "by_category": [
             {
-                "category": row.category,
+                "category": localized(row.category_i18n, row.category, lang),
                 "slug": row.slug,
                 "amount": _money(row.amount),
                 "items_count": int(row.items_count),

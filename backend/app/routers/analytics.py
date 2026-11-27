@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
+from app.core.lang import get_lang
 from app.database import get_db
 from app.models import User
 from app.schemas.analytics import SavingsResponse
@@ -17,5 +18,6 @@ def get_savings(
     days: int = Query(30, ge=1, le=365),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    lang: str = Depends(get_lang),
 ):
-    return analytics_service.get_savings(db, current_user, days)
+    return analytics_service.get_savings(db, current_user, days, lang)

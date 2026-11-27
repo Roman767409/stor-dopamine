@@ -47,6 +47,7 @@ def get_spending_by_category(db: Session, user_id: uuid.UUID) -> list[Row]:
         db.execute(
             select(
                 Category.name.label("category"),
+                Category.name_i18n.label("category_i18n"),
                 Category.slug.label("slug"),
                 amount.label("amount"),
                 func.sum(OrderItem.quantity).label("items_count"),
@@ -56,7 +57,8 @@ def get_spending_by_category(db: Session, user_id: uuid.UUID) -> list[Row]:
             .join(Product, Product.id == OrderItem.product_id)
             .join(Category, Category.id == Product.category_id)
             .where(Order.user_id == user_id)
-            .group_by(Category.id, Category.name, Category.slug)
+            # Grouping by the primary key covers the other category columns
+            .group_by(Category.id)
             .order_by(amount.desc(), Category.name)
         ).all()
     )

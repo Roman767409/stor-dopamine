@@ -4,6 +4,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
+from app.core.lang import get_lang
 from app.database import get_db
 from app.services import product_service
 
@@ -22,12 +23,17 @@ def list_products(
         "title_asc"
     ),
     db: Session = Depends(get_db),
+    lang: str = Depends(get_lang),
 ):
     return product_service.list_catalog(
-        db, page, page_size, category, q, min_price, max_price, sort
+        db, page, page_size, category, q, min_price, max_price, sort, lang
     )
 
 
 @router.get("/{product_id}")
-def get_product(product_id: uuid.UUID, db: Session = Depends(get_db)):
-    return product_service.get_product(db, product_id)
+def get_product(
+    product_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    lang: str = Depends(get_lang),
+):
+    return product_service.get_product(db, product_id, lang)

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.core.errors import get_request_id
+from app.core.lang import get_lang
 from app.database import get_db
 from app.models import User
 from app.schemas.orders import (
@@ -69,5 +70,6 @@ def get_order(
     order_id: uuid.UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    lang: str = Depends(get_lang),
 ):
-    return order_service.get_order(db, current_user.id, order_id)
+    return order_service.get_order(db, current_user.id, order_id, lang)

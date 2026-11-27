@@ -91,12 +91,14 @@ def get_top_products(db: Session, limit: int = TOP_PRODUCTS_LIMIT) -> list[Row]:
             select(
                 Product.id.label("product_id"),
                 Product.title.label("title"),
+                Product.title_i18n.label("title_i18n"),
                 quantity.label("quantity"),
                 revenue.label("revenue"),
             )
             .select_from(OrderItem)
             .join(Product, Product.id == OrderItem.product_id)
-            .group_by(Product.id, Product.title)
+            # Grouping by the primary key covers the other product columns
+            .group_by(Product.id)
             .order_by(quantity.desc(), revenue.desc(), Product.title)
             .limit(limit)
         ).all()
@@ -110,6 +112,7 @@ def get_top_categories(db: Session) -> list[Row]:
         db.execute(
             select(
                 Category.name.label("category"),
+                Category.name_i18n.label("category_i18n"),
                 Category.slug.label("slug"),
                 revenue.label("revenue"),
                 func.sum(OrderItem.quantity).label("items_count"),
@@ -117,7 +120,8 @@ def get_top_categories(db: Session) -> list[Row]:
             .select_from(OrderItem)
             .join(Product, Product.id == OrderItem.product_id)
             .join(Category, Category.id == Product.category_id)
-            .group_by(Category.id, Category.name, Category.slug)
+            # Grouping by the primary key covers the other category columns
+            .group_by(Category.id)
             .order_by(revenue.desc(), Category.name)
         ).all()
     )
