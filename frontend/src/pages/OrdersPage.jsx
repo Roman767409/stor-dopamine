@@ -9,6 +9,7 @@ import LoadingSkeleton from '../components/LoadingSkeleton'
 import PageContainer from '../components/PageContainer'
 import StatusBadge from '../components/StatusBadge'
 import { getErrorKey } from '../utils/apiErrors'
+import { isLanguageReload, makeRequestKey } from '../utils/requestKey'
 import { formatDp, formatLocalDate } from '../utils/format'
 import { btnSmall, cardClass } from '../utils/styles'
 
@@ -21,7 +22,7 @@ function parsePage(value) {
 }
 
 function OrdersPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   // Page lives in the URL so "Back" from order details returns to the same page
@@ -30,9 +31,11 @@ function OrdersPage() {
   // Last server response together with the request key it belongs to (error is a translation key)
   const [result, setResult] = useState({ key: null, items: [], total: 0, error: null })
 
-  const requestKey = JSON.stringify([page, attempt])
-  // Loading until the stored response matches the current request
-  const isLoading = result.key !== requestKey
+  // The language is part of the key so the list is fetched again after a switch
+  const requestKey = makeRequestKey([page, attempt], i18n.language)
+  // Loading until the stored response matches the current request;
+  // after a language switch the current list stays on screen meanwhile
+  const isLoading = result.key !== requestKey && !isLanguageReload(result.key, requestKey)
 
   function goToPage(nextPage) {
     setSearchParams(nextPage > 1 ? { page: String(nextPage) } : {})

@@ -11,6 +11,7 @@ import LoadingSkeleton from '../components/LoadingSkeleton'
 import PageContainer from '../components/PageContainer'
 import ProductCard from '../components/ProductCard'
 import { getErrorKey } from '../utils/apiErrors'
+import { isLanguageReload, makeRequestKey } from '../utils/requestKey'
 
 // How many product requests run in parallel
 const BATCH_SIZE = 6
@@ -51,7 +52,7 @@ async function loadProducts(ids, signal) {
 }
 
 function FavoritesPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const { user } = useAuth()
   const { ids, removeFavorites } = useFavorites()
@@ -59,10 +60,13 @@ function FavoritesPage() {
   // Last loading result together with the key of the request it belongs to (error is a translation key)
   const [result, setResult] = useState({ key: null, products: {}, error: null })
 
-  // A new user or "Try again" starts a new loading; removing a heart on this page does not
-  const requestKey = `${user?.id}:${attempt}`
+  // A new user, "Try again" or a language switch (titles are localized) starts a new loading;
+  // removing a heart on this page does not
+  const requestKey = makeRequestKey([user?.id ?? null, attempt], i18n.language)
   const hasFavorites = ids.length > 0
-  const isLoading = hasFavorites && result.key !== requestKey
+  // After a language switch the current cards stay on screen until the new titles arrive
+  const isLoading =
+    hasFavorites && result.key !== requestKey && !isLanguageReload(result.key, requestKey)
 
   // Reads the ids at the moment the loading starts, without making them an effect dependency
   const getIdsToLoad = useEffectEvent(() => ids)

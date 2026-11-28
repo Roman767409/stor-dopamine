@@ -11,10 +11,12 @@ const timer = [
 ]
 
 function HomePage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const language = i18n.language
   // Featured categories from GET /api/categories; empty if the request fails
   const [categories, setCategories] = useState([])
 
+  // Loaded again after a language switch (names are localized); the old names stay meanwhile
   useEffect(() => {
     const controller = new AbortController()
     let cancelled = false
@@ -30,7 +32,7 @@ function HomePage() {
       cancelled = true
       controller.abort()
     }
-  }, [])
+  }, [language])
 
   return (
     <main className="max-w-[1100px] mx-auto px-6 py-10 flex flex-col gap-16">

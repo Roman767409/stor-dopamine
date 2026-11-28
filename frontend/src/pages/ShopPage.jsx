@@ -8,6 +8,7 @@ import PageContainer from '../components/PageContainer'
 import ProductCard from '../components/ProductCard'
 import ServerWakingBanner from '../components/ServerWakingBanner'
 import { getErrorKey } from '../utils/apiErrors'
+import { isLanguageReload, makeRequestKey } from '../utils/requestKey'
 import { btnSmall, inputClass, labelClass } from '../utils/styles'
 
 const PAGE_SIZE = 12
@@ -36,7 +37,8 @@ function buildParams(filters, q, page) {
 }
 
 function ShopPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const language = i18n.language
   const [filters, setFilters] = useState(EMPTY_FILTERS)
   // Пошуковий рядок, який реально пішов у запит (оновлюється із затримкою)
   const [query, setQuery] = useState('')
@@ -49,12 +51,16 @@ function ShopPage() {
   const [categories, setCategories] = useState([])
 
   const params = buildParams(filters, query, page)
-  const requestKey = JSON.stringify([params, attempt])
+  const requestKey = makeRequestKey([params, attempt], language)
   // Поки відповідь не збігається з поточним запитом, вважаємо, що йде завантаження
   const isLoading = result.key !== requestKey
+  // After a language switch the current cards stay on screen until the new titles arrive
+  const showSkeleton = isLoading && !isLanguageReload(result.key, requestKey)
   const isSlow = isLoading && slowKey === requestKey
 
-  // Load the category list once; a failure must not block the product list
+  // Load the category list (again after a language switch: names are localized).
+  // The filter keeps its value: options are keyed and selected by slug.
+  // A failure must not block the product list.
   useEffect(() => {
     const controller = new AbortController()
     let cancelled = false
@@ -64,13 +70,13 @@ function ShopPage() {
         if (!cancelled) setCategories(response.data)
       })
       .catch(() => {
-        // Keep only "All" in the filter
+        // Keep only "All" (or the names already loaded) in the filter
       })
     return () => {
       cancelled = true
       controller.abort()
     }
-  }, [])
+  }, [language])
 
   // Пошук відправляємо не на кожну літеру, а після паузи в наборі
   useEffect(() => {
@@ -219,16 +225,12 @@ function ShopPage() {
         </div>
       </div>
 
-      {isLoading && (
-        <>
-          {isSlow && <ServerWakingBanner />}
-          <LoadingSkeleton variant="cards" />
-        </>
-      )}
+      {isSlow && <ServerWakingBanner />}
+      {showSkeleton && <LoadingSkeleton variant="cards" />}
 
-      {!isLoading && error && <ErrorState message={t(error)} onRetry={handleRetry} />}
+      {!showSkeleton && error && <ErrorState message={t(error)} onRetry={handleRetry} />}
 
-      {!isLoading && !error && (
+      {!showSkeleton && !error && (
         <>
           <p className="text-sm text-gray-600 mb-8" aria-live="polite">
             {t('common.productsCount', { count: total })}

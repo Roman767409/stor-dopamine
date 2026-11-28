@@ -9,6 +9,7 @@ import LoadingSkeleton from '../components/LoadingSkeleton'
 import PageContainer from '../components/PageContainer'
 import StatusBadge from '../components/StatusBadge'
 import { getErrorKey } from '../utils/apiErrors'
+import { isLanguageReload, makeRequestKey } from '../utils/requestKey'
 import { formatDp, formatLocalDateTime } from '../utils/format'
 import { btnSecondary, cardClass, focusRing } from '../utils/styles'
 
@@ -22,15 +23,17 @@ function isNotFound(error) {
 }
 
 function OrderDetailsPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { id } = useParams()
   const navigate = useNavigate()
   const [attempt, setAttempt] = useState(0)
   // Last server response together with the request key it belongs to (error is a translation key)
   const [result, setResult] = useState({ key: null, order: null, notFound: false, error: null })
 
-  const requestKey = JSON.stringify([id, attempt])
-  const isLoading = result.key !== requestKey
+  // The language is part of the key: line titles come localized
+  const requestKey = makeRequestKey([id, attempt], i18n.language)
+  // After a language switch the order stays on screen until the new titles arrive
+  const isLoading = result.key !== requestKey && !isLanguageReload(result.key, requestKey)
 
   useEffect(() => {
     // Ignore the response if the route changed while the request was in flight

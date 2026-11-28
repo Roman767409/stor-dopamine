@@ -10,6 +10,7 @@ import LoadingSkeleton from '../components/LoadingSkeleton'
 import PageContainer from '../components/PageContainer'
 import SavingsChart from '../components/SavingsChart'
 import { getErrorKey } from '../utils/apiErrors'
+import { isLanguageReload, makeRequestKey } from '../utils/requestKey'
 import { formatDp, formatNumber, toNumber } from '../utils/format'
 import { cardClass } from '../utils/styles'
 
@@ -17,14 +18,16 @@ const MILESTONES = [1000, 10000, 50000]
 const DAYS = 30
 
 function DashboardPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const [attempt, setAttempt] = useState(0)
   // Last server answer together with the request key it belongs to (error is a translation key)
   const [result, setResult] = useState({ key: null, savings: null, error: null })
 
-  const requestKey = JSON.stringify([DAYS, attempt])
-  const isLoading = result.key !== requestKey
+  // The language is part of the key: category names come localized
+  const requestKey = makeRequestKey([DAYS, attempt], i18n.language)
+  // After a language switch the dashboard stays on screen until the new names arrive
+  const isLoading = result.key !== requestKey && !isLanguageReload(result.key, requestKey)
 
   useEffect(() => {
     // Ignore and abort the request if a retry starts or the page is left

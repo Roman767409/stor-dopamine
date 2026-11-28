@@ -10,6 +10,7 @@ import ErrorState from '../components/ErrorState'
 import FavoriteButton from '../components/FavoriteButton'
 import PageContainer from '../components/PageContainer'
 import { getErrorKey } from '../utils/apiErrors'
+import { isLanguageReload, makeRequestKey } from '../utils/requestKey'
 import { formatDp } from '../utils/format'
 import { btnPrimary, focusRing } from '../utils/styles'
 
@@ -46,7 +47,7 @@ function ProductSkeleton() {
 }
 
 function ProductPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { id } = useParams()
   const navigate = useNavigate()
   const { user, isLoading: isAuthLoading } = useAuth()
@@ -57,8 +58,10 @@ function ProductPage() {
   // Last server answer together with the key of the request it belongs to (error is a translation key)
   const [result, setResult] = useState({ key: null, product: null, notFound: false, error: null })
 
-  const requestKey = `${id}:${attempt}`
-  const isLoading = result.key !== requestKey
+  // The language is part of the key: title, description and category come localized
+  const requestKey = makeRequestKey([id, attempt], i18n.language)
+  // After a language switch the product stays on screen until the new texts arrive
+  const isLoading = result.key !== requestKey && !isLanguageReload(result.key, requestKey)
 
   useEffect(() => {
     if (!isAdded) return
@@ -69,9 +72,10 @@ function ProductPage() {
   useEffect(() => {
     // The flag drops the answer if the user has already opened another product
     let cancelled = false
+    const [productId] = JSON.parse(requestKey)
 
     api
-      .get(`/api/products/${id}`)
+      .get(`/api/products/${productId}`)
       .then((response) => {
         if (cancelled) return
         setResult({ key: requestKey, product: response.data, notFound: false, error: null })
@@ -92,7 +96,7 @@ function ProductPage() {
     return () => {
       cancelled = true
     }
-  }, [id, requestKey])
+  }, [requestKey])
 
   if (isLoading) {
     return (

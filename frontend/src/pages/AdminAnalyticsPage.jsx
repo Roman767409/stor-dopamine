@@ -8,6 +8,7 @@ import LoadingSkeleton from '../components/LoadingSkeleton'
 import SavingsChart from '../components/SavingsChart'
 import StatusBadge from '../components/StatusBadge'
 import { getErrorKey, isForbidden } from '../utils/apiErrors'
+import { isLanguageReload, makeRequestKey } from '../utils/requestKey'
 import { formatDp, formatNumber, toNumber } from '../utils/format'
 import { ORDER_STEPS } from '../utils/orderStatus'
 import { cardClass } from '../utils/styles'
@@ -20,13 +21,15 @@ function percentOf(part, total) {
 }
 
 function AdminAnalyticsPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [attempt, setAttempt] = useState(0)
   // Last server answer together with the request key it belongs to (error is a translation key)
   const [result, setResult] = useState({ key: null, stats: null, error: null, forbidden: false })
 
-  const requestKey = JSON.stringify([DAYS, attempt])
-  const isLoading = result.key !== requestKey
+  // The language is part of the key: top product and category names come localized
+  const requestKey = makeRequestKey([DAYS, attempt], i18n.language)
+  // After a language switch the statistics stay on screen until the new names arrive
+  const isLoading = result.key !== requestKey && !isLanguageReload(result.key, requestKey)
 
   useEffect(() => {
     // Abort and ignore the request if a retry starts or the page is left
