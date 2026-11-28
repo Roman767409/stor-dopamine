@@ -306,7 +306,16 @@
         "maxLength_other": "Не більше {{count}} символу",
         "categoryRequired": "Оберіть категорію",
         "priceInvalid": "Ціна має бути більшою за 0 і мати не більше 2 знаків після коми",
-        "urlInvalid": "URL має починатися з http:// або https://"
+        "urlInvalid": "URL має починатися з http:// або https://",
+        "translations": "Переклади",
+        "translationsHint": "Залиште порожнім, щоб використати основну назву",
+        "translationTitle": "Назва ({{language}})",
+        "translationDescription": "Опис ({{language}})",
+        "languages": {
+          "en": "English",
+          "pl": "Polski",
+          "uk": "Українська"
+        }
       }
     },
     "logs": {
@@ -327,7 +336,35 @@
       "show": "Показати",
       "hide": "Сховати",
       "requestIdValue": "ID запиту: {{id}}",
-      "noDetails": "Деталей немає"
+      "noDetails": "Деталей немає",
+      "summary": {
+        "order": "Замовлення {{tracking}}",
+        "orderNoTracking": "Замовлення",
+        "itemsCount_one": "{{count}} товар",
+        "itemsCount_few": "{{count}} товари",
+        "itemsCount_many": "{{count}} товарів",
+        "itemsCount_other": "{{count}} товару",
+        "productCreated": "Додано товар: {{title}}",
+        "productCreatedNoTitle": "Додано товар",
+        "productUpdated": "Змінено товар: {{title}}",
+        "productUpdatedNoTitle": "Змінено товар",
+        "changed": "зміни: {{fields}}",
+        "productDeactivated": "Деактивовано товар: {{title}}",
+        "productDeactivatedNoTitle": "Деактивовано товар",
+        "balanceReset": "Скинуто баланс: {{change}}",
+        "balanceResetNoAmounts": "Скинуто баланс",
+        "detailsAvailable": "Деталі доступні",
+        "fields": {
+          "title": "назва",
+          "description": "опис",
+          "title_i18n": "переклади назви",
+          "description_i18n": "переклади опису",
+          "price": "ціна",
+          "category_id": "категорія",
+          "image_url": "зображення",
+          "is_active": "видимість"
+        }
+      }
     },
     "analytics": {
       "title": "Аналітика",

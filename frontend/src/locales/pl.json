@@ -306,7 +306,16 @@
         "maxLength_other": "Maksymalnie {{count}} znaku",
         "categoryRequired": "Wybierz kategorię",
         "priceInvalid": "Cena musi być większa od 0 i mieć najwyżej 2 miejsca po przecinku",
-        "urlInvalid": "Adres URL musi zaczynać się od http:// lub https://"
+        "urlInvalid": "Adres URL musi zaczynać się od http:// lub https://",
+        "translations": "Tłumaczenia",
+        "translationsHint": "Zostaw puste, aby użyć domyślnej nazwy",
+        "translationTitle": "Nazwa ({{language}})",
+        "translationDescription": "Opis ({{language}})",
+        "languages": {
+          "en": "English",
+          "pl": "Polski",
+          "uk": "Українська"
+        }
       }
     },
     "logs": {
@@ -327,7 +336,35 @@
       "show": "Pokaż",
       "hide": "Ukryj",
       "requestIdValue": "ID żądania: {{id}}",
-      "noDetails": "Brak szczegółów"
+      "noDetails": "Brak szczegółów",
+      "summary": {
+        "order": "Zamówienie {{tracking}}",
+        "orderNoTracking": "Zamówienie",
+        "itemsCount_one": "{{count}} produkt",
+        "itemsCount_few": "{{count}} produkty",
+        "itemsCount_many": "{{count}} produktów",
+        "itemsCount_other": "{{count}} produktu",
+        "productCreated": "Dodano produkt: {{title}}",
+        "productCreatedNoTitle": "Dodano produkt",
+        "productUpdated": "Zmieniono produkt: {{title}}",
+        "productUpdatedNoTitle": "Zmieniono produkt",
+        "changed": "zmiany: {{fields}}",
+        "productDeactivated": "Dezaktywowano produkt: {{title}}",
+        "productDeactivatedNoTitle": "Dezaktywowano produkt",
+        "balanceReset": "Zresetowano saldo: {{change}}",
+        "balanceResetNoAmounts": "Zresetowano saldo",
+        "detailsAvailable": "Szczegóły dostępne",
+        "fields": {
+          "title": "nazwa",
+          "description": "opis",
+          "title_i18n": "tłumaczenia nazwy",
+          "description_i18n": "tłumaczenia opisu",
+          "price": "cena",
+          "category_id": "kategoria",
+          "image_url": "zdjęcie",
+          "is_active": "widoczność"
+        }
+      }
     },
     "analytics": {
       "title": "Analityka",

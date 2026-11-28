@@ -292,7 +292,16 @@
         "maxLength_other": "Max {{count}} characters",
         "categoryRequired": "Choose a category",
         "priceInvalid": "Price must be greater than 0, with at most 2 decimal places",
-        "urlInvalid": "URL must start with http:// or https://"
+        "urlInvalid": "URL must start with http:// or https://",
+        "translations": "Translations",
+        "translationsHint": "Leave empty to use the default title",
+        "translationTitle": "Title ({{language}})",
+        "translationDescription": "Description ({{language}})",
+        "languages": {
+          "en": "English",
+          "pl": "Polski",
+          "uk": "Українська"
+        }
       }
     },
     "logs": {
@@ -313,7 +322,33 @@
       "show": "Show",
       "hide": "Hide",
       "requestIdValue": "Request ID: {{id}}",
-      "noDetails": "No details"
+      "noDetails": "No details",
+      "summary": {
+        "order": "Order {{tracking}}",
+        "orderNoTracking": "Order",
+        "itemsCount_one": "{{count}} item",
+        "itemsCount_other": "{{count}} items",
+        "productCreated": "Product created: {{title}}",
+        "productCreatedNoTitle": "Product created",
+        "productUpdated": "Product updated: {{title}}",
+        "productUpdatedNoTitle": "Product updated",
+        "changed": "changed: {{fields}}",
+        "productDeactivated": "Product deactivated: {{title}}",
+        "productDeactivatedNoTitle": "Product deactivated",
+        "balanceReset": "Balance reset: {{change}}",
+        "balanceResetNoAmounts": "Balance reset",
+        "detailsAvailable": "Details available",
+        "fields": {
+          "title": "title",
+          "description": "description",
+          "title_i18n": "title translations",
+          "description_i18n": "description translations",
+          "price": "price",
+          "category_id": "category",
+          "image_url": "image",
+          "is_active": "visibility"
+        }
+      }
     },
     "analytics": {
       "title": "Analytics",
