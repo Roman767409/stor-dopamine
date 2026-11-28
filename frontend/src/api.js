@@ -1,7 +1,9 @@
 // Спільний axios-клієнт: адреса бекенду, заголовок Authorization та авто-refresh при 401
 import axios from 'axios'
+import i18n, { DEFAULT_LANGUAGE } from './i18n'
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
+const LANGUAGE_HEADER = 'Accept-Language'
 const ACCESS_KEY = 'access_token'
 const REFRESH_KEY = 'refresh_token'
 // Для цих маршрутів 401 означає «невірні дані», а не «прострочений токен»
@@ -60,6 +62,14 @@ api.interceptors.request.use((config) => {
   const accessToken = readItem(ACCESS_KEY)
   if (accessToken) {
     config.headers.Authorization = `Bearer ${accessToken}`
+  }
+  // The backend localizes product and category names by this header.
+  // The UI language is read at request time, so a retry after the token refresh
+  // (which passes through here again) uses the current language too.
+  // A language set explicitly by the caller is kept (e.g. caches keyed by language).
+  if (config._autoLanguage || !config.headers.has(LANGUAGE_HEADER)) {
+    config.headers.set(LANGUAGE_HEADER, i18n.language || DEFAULT_LANGUAGE)
+    config._autoLanguage = true
   }
   return config
 })

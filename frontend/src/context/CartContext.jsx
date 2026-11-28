@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
+import { useLocalizedTitles } from '../hooks/useLocalizedTitles'
 import { useAuth } from './AuthContext'
 
 const MIN_QUANTITY = 1
@@ -99,7 +100,15 @@ export function CartProvider({ children }) {
   }
 
   // Поки кошик не підмінено на кошик поточного власника, показуємо порожній
-  const items = cart.key === storageKey ? cart.items : []
+  const storedItems = cart.key === storageKey ? cart.items : []
+  // Stored items keep the title snapshot from the moment they were added (any language,
+  // old entries included); for display it is replaced with the title in the UI language.
+  // Only the shown title changes: localStorage keeps its format.
+  const titleOf = useLocalizedTitles(storedItems.map((item) => item.id))
+  const items = storedItems.map((item) => {
+    const title = titleOf(item.id, item.title)
+    return title === item.title ? item : { ...item, title }
+  })
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0)
   const totalPrice = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
 
