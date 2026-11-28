@@ -4,7 +4,10 @@ from helpers import error_code
 
 
 def test_list_returns_seeded_products(client):
-    response = client.get("/api/products", params={"page_size": 50})
+    # Seed titles are stored in Ukrainian; ask for Ukrainian explicitly
+    response = client.get(
+        "/api/products", params={"page_size": 50}, headers={"Accept-Language": "uk"}
+    )
     assert response.status_code == 200
     body = response.json()
     assert body["total"] >= 8
@@ -26,7 +29,9 @@ def test_search_by_title_is_case_insensitive(client, make_product):
 
 
 def test_search_seeded_product(client):
-    response = client.get("/api/products", params={"q": "Термокружка"})
+    response = client.get(
+        "/api/products", params={"q": "Термокружка"}, headers={"Accept-Language": "uk"}
+    )
     assert response.status_code == 200
     items = response.json()["items"]
     assert items
