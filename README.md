@@ -35,6 +35,11 @@ A presentation script is in [docs/DEMO.md](docs/DEMO.md).
 - Multi-language UI (English default, Polish, Ukrainian): an EN / PL / UA
   switch in the header (and in the mobile menu), the choice is kept in
   `localStorage`; dates and numbers follow the selected language.
+  Product titles, descriptions and category names are multilingual too: every
+  request carries the UI language in `Accept-Language`, and the shop, cart,
+  favorites, orders, dashboard and admin pages reload their data when the
+  language changes (without a page reload). Search finds a product by its
+  title in any of the three languages.
 - Favorites: a heart on product cards and the product page, a counter in the
   header and a `/favorites` page. The list is stored in the browser
   (`localStorage`) separately for each user; deleted or deactivated products
@@ -56,7 +61,10 @@ A presentation script is in [docs/DEMO.md](docs/DEMO.md).
 **Administrators (admin role)**
 
 - Product management: create, edit and deactivate products (soft delete), with
-  search and an active/inactive filter.
+  search and an active/inactive filter. The product form has a
+  **Translations** block with an optional title and description in English,
+  Polish and Ukrainian; an empty language falls back to English, then to the
+  base title.
 - Audit log viewer with filters by action, entity type, actor and date range.
 - Store-wide analytics: users, orders, revenue, orders by status, top products,
   top categories and orders per day.
@@ -122,13 +130,13 @@ stor_dopamine/
 │   │   ├── database.py                 # engine, SessionLocal, get_db
 │   │   ├── models.py                   # SQLAlchemy models (7 tables)
 │   │   ├── auth.py                     # JWT, refresh tokens, require_role
-│   │   ├── core/                       # constants, unified error handling
+│   │   ├── core/                       # constants, unified error handling, response language
 │   │   ├── routers/                    # HTTP endpoints
 │   │   ├── schemas/                    # Pydantic request/response models
 │   │   ├── services/                   # business logic and transactions
 │   │   └── repositories/               # database queries
-│   ├── alembic/                        # migrations (3 revisions)
-│   ├── tests/                          # pytest suite (244 tests)
+│   ├── alembic/                        # migrations (4 revisions)
+│   ├── tests/                          # pytest suite (311 tests)
 │   ├── seed.py                         # demo categories and products
 │   ├── docker-compose.yml              # PostgreSQL 17 container
 │   ├── requirements.txt
@@ -140,6 +148,7 @@ stor_dopamine/
     │   ├── api.js                      # Axios client, token refresh on 401
     │   ├── App.jsx                     # routes
     │   ├── context/                    # AuthContext, CartContext, FavoritesContext
+    │   ├── hooks/                      # useLocalizedTitles: cart titles in the UI language
 │   ├── i18n/                       # i18next setup (default language, saved choice)
 │   ├── locales/                    # en.json, pl.json, uk.json translations
     │   ├── pages/                      # shop, checkout, tracking, dashboard, admin…
@@ -247,7 +256,7 @@ pip install -r requirements-dev.txt
 pytest -q
 ```
 
-The suite has 244 tests and runs in about two minutes.
+The suite has 311 tests and runs in about two minutes.
 
 - It never touches the dev database. `tests/conftest.py` takes
   `DATABASE_URL`, replaces the database name with `dopaminestore_test` (or uses
@@ -261,6 +270,7 @@ The suite has 244 tests and runs in about two minutes.
 | --- | --- |
 | `test_auth.py` | register, case-insensitive duplicate email, login, wrong password, refresh rotation, logout, `/me` without a token |
 | `test_products.py` | catalog list, search, category filter, product by id, 404 |
+| `test_i18n.py` | `Accept-Language` parsing (`en`, `pl`, `uk`, `ua` → `uk`, unknown → `en`), localized titles, descriptions and category names in the catalog, product, categories, order details, savings and admin analytics; base-title fallback for products without translations; search in any language; title sort by the localized title; admin `title_i18n`/`description_i18n` create, replace, audit and 422 on bad keys |
 | `test_checkout.py` | order totals and tracking number format, idempotent replay, insufficient funds, unavailable products, server-side prices, **concurrent checkout race** |
 | `test_orders_tracking.py` | own orders only, `compute_status` boundaries (29/30 s, 599/600 s, 7199/7200 s), tracking after shifting `created_at`, status never goes back |
 | `test_rbac_admin.py` | 401/403/200 on admin endpoints, product create/update/delete audit entries, deactivated product hidden from the catalog, log filters, `INVALID_DATE_RANGE`, analytics keys |
@@ -279,6 +289,17 @@ admin), via `Authorization: Bearer <access_token>`. **Admin**: `admin` role
 only. Without a token the API returns 401; with a wrong role it returns 403
 `FORBIDDEN`.
 
+**Localized texts.** Responses are localized by the `Accept-Language` header
+(`en`, `pl`, `uk`; `ua` is treated as `uk`). Only the first language in the
+header counts; a missing or unsupported language gives English. Product
+`title`/`description` and category names (`category`, `name`) come back in the
+same fields as before, picked as requested language → English → base text.
+This applies to the catalog, product details, categories, order details,
+savings and admin analytics. Translations are stored in JSONB columns
+(`products.title_i18n`, `products.description_i18n`, `categories.name_i18n`),
+so there are no extra tables; the plain `title`, `description` and `name`
+columns keep the base text. Responses carry `Vary: Accept-Language`.
+
 | Method | Path | Role | Description |
 | --- | --- | --- | --- |
 | GET | `/api/health` | Public | Liveness check, returns `{"status": "ok"}` |
@@ -288,7 +309,7 @@ only. Without a token the API returns 401; with a wrong role it returns 403
 | POST | `/api/auth/logout` | Public (refresh token in body) | Revokes the refresh token. 204 |
 | GET | `/api/auth/me` | User | Current user: id, email, role, `virtual_balance`, `total_saved_amount` |
 | GET | `/api/categories` | Public | Categories with active product counts |
-| GET | `/api/products` | Public | Active products: `page`, `page_size`, `category` (slug), `q`, `min_price`, `max_price`, `sort` |
+| GET | `/api/products` | Public | Active products: `page`, `page_size`, `category` (slug), `q`, `min_price`, `max_price`, `sort`. `q` matches the base title and every translation; `title_asc` sorts by the localized title |
 | GET | `/api/products/{product_id}` | Public | One active product. 404 `PRODUCT_NOT_FOUND` |
 | POST | `/api/orders` | User | Checkout. Requires the `Idempotency-Key` header. 201 new order, 200 replay of the same key; 400 `INSUFFICIENT_FUNDS`, 409 `PRODUCT_UNAVAILABLE` |
 | GET | `/api/orders` | User | Own order history, newest first, paginated |
@@ -297,9 +318,9 @@ only. Without a token the API returns 401; with a wrong role it returns 403
 | GET | `/api/analytics/savings` | User | Savings dashboard data; `days` sets the chart window |
 | POST | `/api/users/me/balance/reset` | User | Reset balance to 100 000 DP. 409 `NOTHING_TO_RESET` |
 | POST | `/api/chat` | User | DopaBot rule-based chat: `{"message", "lang"}` (message 1–500 chars after trim; optional `lang`: `en`, `pl` or `uk`, the UI language) → `{"reply", "intent", "suggestions"}`. 422 for an empty or too long message or another `lang` |
-| GET | `/api/admin/products` | Admin | All products incl. inactive; `q`, `is_active`, pagination |
-| POST | `/api/admin/products` | Admin | Create a product (audited: `PRODUCT_CREATED`) |
-| PATCH | `/api/admin/products/{product_id}` | Admin | Partial update; only changed fields are audited (`PRODUCT_UPDATED`) |
+| GET | `/api/admin/products` | Admin | All products incl. inactive; `q`, `is_active`, pagination. `title`/`description` are the base texts; `title_i18n`/`description_i18n` hold the translations (`{"en", "pl", "uk"}` or null) |
+| POST | `/api/admin/products` | Admin | Create a product (audited: `PRODUCT_CREATED`). Optional `title_i18n`/`description_i18n`: only `en`, `pl`, `uk` keys with string values (title ≤ 120 chars), empty values dropped; other keys give 422 |
+| PATCH | `/api/admin/products/{product_id}` | Admin | Partial update; only changed fields are audited (`PRODUCT_UPDATED`). `title_i18n`/`description_i18n` replace the whole object (null clears it) |
 | DELETE | `/api/admin/products/{product_id}` | Admin | Soft delete: deactivates the product (`PRODUCT_DELETED`). 204 |
 | GET | `/api/admin/logs` | Admin | Audit log: `action`, `entity_type`, `actor`, `date_from`, `date_to`, pagination. 422 `INVALID_DATE_RANGE` |
 | GET | `/api/admin/logs/actions` | Admin | Distinct action names for the filter |
@@ -307,9 +328,9 @@ only. Without a token the API returns 401; with a wrong role it returns 403
 
 ## Database
 
-PostgreSQL 17. The schema is managed by Alembic (3 revisions in
-`backend/alembic/versions`): the initial schema, orders and order items, and
-the audit log.
+PostgreSQL 17. The schema is managed by Alembic (4 revisions in
+`backend/alembic/versions`): the initial schema, orders and order items, the
+audit log, and the translation columns (`*_i18n`, filled for the seed data).
 
 ```mermaid
 erDiagram
@@ -323,9 +344,9 @@ erDiagram
 
 | Table | Purpose | Key constraints |
 | --- | --- | --- |
-| `categories` | Product categories | `name` UNIQUE, `slug` UNIQUE |
+| `categories` | Product categories | `name` UNIQUE, `slug` UNIQUE; `name_i18n` JSONB translations (`en`, `pl`, `uk`), nullable |
 | `users` | Accounts with role and virtual balance | UUID PK; unique index on `lower(email)` (case-insensitive); CHECK `role IN ('client','admin')`; CHECK `virtual_balance >= 0`; CHECK `total_saved_amount >= 0`; default balance `100000.00` |
-| `products` | Catalog | FK `category_id → categories` ON DELETE RESTRICT; CHECK `price > 0`; `is_active` flag for soft delete; index `(is_active, category_id)` |
+| `products` | Catalog | FK `category_id → categories` ON DELETE RESTRICT; CHECK `price > 0`; `is_active` flag for soft delete; index `(is_active, category_id)`; `title_i18n`, `description_i18n` JSONB translations, nullable |
 | `refresh_tokens` | Refresh tokens (SHA-256 hash only) | FK `user_id → users` ON DELETE CASCADE; `token_hash` UNIQUE; `expires_at`, `revoked_at` |
 | `orders` | Orders | FK `user_id → users`; `tracking_number` UNIQUE; UNIQUE `(user_id, idempotency_key)`; CHECK `total_price > 0`; CHECK `status IN ('CREATED','PROCESSING','IN_TRANSIT','DELIVERED')`; `shipping_address` JSONB; index `(user_id, created_at DESC)` |
 | `order_items` | Order lines with the price at purchase time | FK `order_id → orders` ON DELETE CASCADE; FK `product_id → products` ON DELETE RESTRICT; CHECK `quantity BETWEEN 1 AND 99`; CHECK `price_at_purchase > 0`; UNIQUE `(order_id, product_id)` |
@@ -406,7 +427,7 @@ than the stored one. The thresholds are constants at the top of
 
 ### Test suite with a race test
 
-244 pytest tests run against an isolated, automatically recreated test database
+311 pytest tests run against an isolated, automatically recreated test database
 (see [Tests](#tests)). Besides the happy paths and error codes, the suite
 includes a **concurrency test**. Two threads start a checkout at the same
 moment for the same user, each costing 60 000 DP of the 100 000 balance. The

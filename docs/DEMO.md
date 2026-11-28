@@ -82,8 +82,7 @@ purchase counts as real money saved."
 **EN** (on a phone the switch is in the ☰ menu). The whole interface changes
 at once, without a reload, and amounts follow the language (`100,000 DP` in
 English, `100 000 DP` in Polish and Ukrainian). Reload the page: the chosen
-language stays. Product and category names come from the database and are
-not translated. Continue the demo in English.
+language stays. Continue the demo in English.
 
 ### 2. Registration (≈ 40 s)
 
@@ -98,20 +97,29 @@ regardless of case.
 
 ### 3. Catalog and search (≈ 1 min)
 
-**Do:** Open **Shop**. Type `лампа` or `Термокружка` in the search box
-(seed product titles are in Ukrainian), then pick a category (e.g.
-Електроніка) and change the sorting.
+**Do:** Open **Shop**. Type `lamp` or `mug` in the search box, then pick a
+category (e.g. Electronics) and change the sorting.
 
 **Expect:** The list narrows to matching products. Filtering, search and
 sorting are done by the API (`GET /api/products?q=…&category=…&sort=…`).
 
+**Translated names (≈ 20 s):** With the Electronics filter still on, click
+**PL**, then **UA** in the header. Product titles and the category names in
+the filter change at once (`Wireless headphones` → `Słuchawki bezprzewodowe`
+→ `Бездротові навушники`), the selected category stays, and the page does not
+reload. Search works in any language: `słuchawki` or `навушники` finds the
+same product. Switch back to **EN**.
+
 ### 4. Cart (≈ 40 s)
 
-**Do:** Open a product (e.g. "Смарт-годинник", 6 900 DP) and add it to the
+**Do:** Open a product (e.g. "Smartwatch", 6 900 DP) and add it to the
 cart. Add a second product, then open **Cart** and change a quantity.
 
 **Expect:** The cart shows the items, the total and **Your balance**. If the
 total exceeded the balance, the cart would show **Not enough DP**.
+
+**Optional:** Switch to **PL** on the cart page: the titles in the cart follow
+the language too, then switch back to **EN**.
 
 ### 5. Checkout (≈ 1 min)
 
@@ -189,11 +197,15 @@ starting amount (`NOTHING_TO_RESET`).
 
 **Do:** Log out, log in as `admin@test.com` / `Admin12345` and open
 **Admin panel** in the header menu. In **Products**, add a product (e.g.
-"Demo Speaker", 1 200 DP), edit its price, then deactivate it.
+"Demo Speaker", 1 200 DP). In the **Translations** block fill the titles
+`Demo Speaker` (English), `Głośnik demo` (Polski) and `Демо-колонка`
+(Українська). Switch the header to **PL** and back: the table shows the
+Polish title. Then edit its price and deactivate it.
 
 **Expect:** The product appears in the table and then becomes inactive. In
 the Shop tab it is no longer visible. Deactivation is a soft delete, so past
-orders keep their reference.
+orders keep their reference. The edit form always shows the base title plus
+the translations, whatever the UI language.
 
 **Optional:** Show that the demo shopper cannot open `/admin` (the API
 returns 403 `FORBIDDEN` for the client role).
@@ -214,7 +226,8 @@ entity, JSON details and a request id.
 
 **Expect:** Number of users and orders, total volume, average order value,
 active products, orders by status, top products, top categories and the
-orders volume per day.
+orders volume per day. Switching the language renames the top products and
+categories without a reload.
 
 ### 13. The audit log cannot be changed, even with SQL (≈ 1 min)
 
