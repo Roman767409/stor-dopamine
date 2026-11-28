@@ -10,6 +10,8 @@ import LoadingSkeleton from '../components/LoadingSkeleton'
 import ProductFormModal from '../components/ProductFormModal'
 import { getErrorKey, isForbidden } from '../utils/apiErrors'
 import { formatDp } from '../utils/format'
+import { localizedTitle, sameTranslations } from '../utils/productTranslations'
+import { isLanguageReload, makeRequestKey } from '../utils/requestKey'
 import { btnPrimary, btnSmall, errorClass, inputClass, labelClass } from '../utils/styles'
 
 const PAGE_SIZE = 20
@@ -43,11 +45,26 @@ function actionErrorKey(error, fallbackKey) {
   return key
 }
 
-// Only the fields that differ from the loaded product (PATCH is a partial update)
+// New product body: translations are sent only when at least one language is filled
+function createBody(values) {
+  const body = { ...values }
+  if (!body.title_i18n) delete body.title_i18n
+  if (!body.description_i18n) delete body.description_i18n
+  return body
+}
+
+// Only the fields that differ from the loaded product (PATCH is a partial update).
+// Translations are sent as a whole object (the backend replaces it); null clears them.
 function changedFields(product, values) {
   const changes = {}
   if (values.title !== product.title) changes.title = values.title
   if (values.description !== (product.description ?? '')) changes.description = values.description
+  if (!sameTranslations(values.title_i18n, product.title_i18n)) {
+    changes.title_i18n = values.title_i18n
+  }
+  if (!sameTranslations(values.description_i18n, product.description_i18n)) {
+    changes.description_i18n = values.description_i18n
+  }
   if (Number(values.price) !== Number(product.price)) changes.price = values.price
   if (values.category_id !== product.category?.id) changes.category_id = values.category_id
   if (values.image_url !== (product.image_url ?? null)) changes.image_url = values.image_url
@@ -56,7 +73,8 @@ function changedFields(product, values) {
 }
 
 function AdminProductsPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const language = i18n.language
   const [search, setSearch] = useState('')
   // Search text that actually went into the request (updated after a pause in typing)
   const [query, setQuery] = useState('')
@@ -84,10 +102,13 @@ function AdminProductsPage() {
   const params = { page, page_size: PAGE_SIZE }
   if (query) params.q = query
   if (status) params.is_active = status
-  const requestKey = JSON.stringify([params, attempt])
+  // The language is part of the key: category names come localized
+  const requestKey = makeRequestKey([params, attempt], language)
   const isLoading = result.key !== requestKey
+  // After a language switch the table stays on screen until the new names arrive
+  const showSkeleton = isLoading && !isLanguageReload(result.key, requestKey)
 
-  // Categories for the form's select
+  // Categories for the form's select (loaded again after a language switch)
   useEffect(() => {
     const controller = new AbortController()
     let cancelled = false
@@ -103,7 +124,7 @@ function AdminProductsPage() {
       cancelled = true
       controller.abort()
     }
-  }, [categoriesAttempt])
+  }, [categoriesAttempt, language])
 
   // Send the search after a pause in typing, not on every letter
   useEffect(() => {
@@ -186,7 +207,7 @@ function AdminProductsPage() {
     setFormError(null)
     let request
     if (editing === 'new') {
-      request = () => api.post('/api/admin/products', values)
+      request = () => api.post('/api/admin/products', createBody(values))
     } else {
       const changes = changedFields(editing, values)
       if (Object.keys(changes).length === 0) {
@@ -290,11 +311,11 @@ function AdminProductsPage() {
         </p>
       )}
 
-      {isLoading && <LoadingSkeleton variant="list" />}
+      {showSkeleton && <LoadingSkeleton variant="list" />}
 
-      {!isLoading && error && <ErrorState message={t(error)} onRetry={reload} />}
+      {!showSkeleton && error && <ErrorState message={t(error)} onRetry={reload} />}
 
-      {!isLoading && !error && products.length === 0 && (
+      {!showSkeleton && !error && products.length === 0 && (
         <EmptyState
           title={t('admin.products.emptyTitle')}
           text={query || status ? t('admin.products.emptyFiltered') : t('admin.products.emptyText')}
@@ -303,7 +324,7 @@ function AdminProductsPage() {
         />
       )}
 
-      {!isLoading && !error && products.length > 0 && (
+      {!showSkeleton && !error && products.length > 0 && (
         <>
           <table className="w-full text-sm text-left">
             <thead className="border-b border-gray-200 text-xs text-gray-600">
@@ -329,10 +350,11 @@ function AdminProductsPage() {
               {products.map((product) => (
                 <tr key={product.id} className="border-b border-gray-200 align-top">
                   <td className="py-4 pr-4">
+                    {/* The list shows the title in the UI language; the form edits the base one */}
                     <span
                       className={`font-medium break-words ${product.is_active ? '' : 'text-gray-500'}`}
                     >
-                      {product.title}
+                      {localizedTitle(product, language)}
                     </span>
                     {/* On narrow screens category and status move under the title */}
                     <span className="block sm:hidden text-xs text-gray-600">
@@ -432,7 +454,7 @@ function AdminProductsPage() {
       {toDeactivate && (
         <ConfirmModal
           title={t('admin.products.confirmTitle')}
-          text={t('admin.products.confirmText', { title: toDeactivate.title })}
+          text={t('admin.products.confirmText', { title: localizedTitle(toDeactivate, language) })}
           confirmLabel={t('admin.products.deactivate')}
           isBusy={isBusy}
           onConfirm={handleConfirmDeactivate}

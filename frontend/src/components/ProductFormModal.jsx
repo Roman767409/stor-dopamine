@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import FormField from './FormField'
 import Modal from './Modal'
+import { TRANSLATION_LANGUAGES, cleanTranslations } from '../utils/productTranslations'
 import { btnPrimary, btnSecondary, errorClass, focusRing } from '../utils/styles'
 
 // Backend limits (app/schemas/admin_products.py)
@@ -11,9 +12,25 @@ const IMAGE_URL_MAX_LENGTH = 500
 // Positive number with at most 10 integer digits and 2 decimals (Numeric(12, 2))
 const PRICE_PATTERN = /^\d{1,10}(\.\d{1,2})?$/
 
+// Translation keys of the language names shown in the "Translations" block
+const LANGUAGE_NAME_KEYS = {
+  en: 'admin.products.form.languages.en',
+  pl: 'admin.products.form.languages.pl',
+  uk: 'admin.products.form.languages.uk',
+}
+
+// Form values for { en, pl, uk } translations: every language present, '' when missing
+function translationValues(translations) {
+  return Object.fromEntries(
+    TRANSLATION_LANGUAGES.map((language) => [language, translations?.[language] ?? ''])
+  )
+}
+
 // categories: [{ id, name, slug }] from GET /api/categories;
 // isSaving disables the buttons, serverError is shown above them
-// serverError is already translated by the parent
+// serverError is already translated by the parent.
+// The form edits the BASE title and description (as the admin API returns them)
+// plus the optional translations title_i18n / description_i18n.
 function ProductFormModal({ product, categories, isSaving, serverError, onSave, onCancel }) {
   const { t } = useTranslation()
   const [values, setValues] = useState(() => ({
@@ -23,6 +40,8 @@ function ProductFormModal({ product, categories, isSaving, serverError, onSave, 
     price: product ? String(product.price) : '',
     image_url: product?.image_url ?? '',
     is_active: product?.is_active ?? true,
+    title_i18n: translationValues(product?.title_i18n),
+    description_i18n: translationValues(product?.description_i18n),
   }))
   // Field errors as [translationKey, options], translated while rendering
   const [errors, setErrors] = useState({})
@@ -31,11 +50,25 @@ function ProductFormModal({ product, categories, isSaving, serverError, onSave, 
     setValues((prev) => ({ ...prev, [name]: value }))
   }
 
+  // field: 'title_i18n' or 'description_i18n'
+  function updateTranslation(field, language, value) {
+    setValues((prev) => ({ ...prev, [field]: { ...prev[field], [language]: value } }))
+  }
+
   function validate() {
     const nextErrors = {}
     if (values.title.trim() === '') nextErrors.title = ['admin.products.form.titleRequired']
     else if (values.title.trim().length > TITLE_MAX_LENGTH) {
       nextErrors.title = ['admin.products.form.maxLength', { count: TITLE_MAX_LENGTH }]
+    }
+    // Translated titles are optional; a filled one has the same limit as the base title
+    for (const language of TRANSLATION_LANGUAGES) {
+      if (values.title_i18n[language].trim().length > TITLE_MAX_LENGTH) {
+        nextErrors[`title_i18n.${language}`] = [
+          'admin.products.form.maxLength',
+          { count: TITLE_MAX_LENGTH },
+        ]
+      }
     }
     if (!values.category_id) nextErrors.category_id = ['admin.products.form.categoryRequired']
     const price = values.price.trim()
@@ -65,6 +98,9 @@ function ProductFormModal({ product, categories, isSaving, serverError, onSave, 
       price: values.price.trim(),
       image_url: values.image_url.trim() || null,
       is_active: values.is_active,
+      // Only the filled languages; null when there are none
+      title_i18n: cleanTranslations(values.title_i18n),
+      description_i18n: cleanTranslations(values.description_i18n),
     })
   }
 
@@ -136,6 +172,42 @@ function ProductFormModal({ product, categories, isSaving, serverError, onSave, 
           />
           {t('admin.products.form.isActive')}
         </label>
+
+        {/* A legend is not a flex item, so the fields get their own flex wrapper */}
+        <fieldset>
+          <legend className="text-sm font-semibold">{t('admin.products.form.translations')}</legend>
+          <p className="mt-1 mb-5 text-xs text-gray-600">{t('admin.products.form.translationsHint')}</p>
+          <div className="flex flex-col gap-5">
+            {TRANSLATION_LANGUAGES.map((language) => {
+              const languageName = t(LANGUAGE_NAME_KEYS[language])
+              return (
+                <div key={language} className="flex flex-col gap-3">
+                  <FormField
+                    id={`product-title-${language}`}
+                    lang={language}
+                    label={t('admin.products.form.translationTitle', { language: languageName })}
+                    value={values.title_i18n[language]}
+                    error={errorText(`title_i18n.${language}`)}
+                    onChange={(event) => updateTranslation('title_i18n', language, event.target.value)}
+                  />
+                  <FormField
+                    id={`product-description-${language}`}
+                    lang={language}
+                    label={t('admin.products.form.translationDescription', {
+                      language: languageName,
+                    })}
+                    as="textarea"
+                    rows={2}
+                    value={values.description_i18n[language]}
+                    onChange={(event) =>
+                      updateTranslation('description_i18n', language, event.target.value)
+                    }
+                  />
+                </div>
+              )
+            })}
+          </div>
+        </fieldset>
 
         {serverError && (
           <p role="alert" className={errorClass}>
