@@ -7,23 +7,16 @@ import EmptyState from '../components/EmptyState'
 import ErrorState from '../components/ErrorState'
 import LoadingSkeleton from '../components/LoadingSkeleton'
 import { getErrorKey, isForbidden } from '../utils/apiErrors'
-import { formatLocalDateTime } from '../utils/format'
+import { summarizeLog } from '../utils/auditSummary'
+import { formatDp, formatLocalDateTime } from '../utils/format'
 import { btnSmall, errorClass, inputClass, labelClass } from '../utils/styles'
 
 const PAGE_SIZE = 20
 const SEARCH_DEBOUNCE_MS = 300
-const DETAILS_PREVIEW_LENGTH = 60
 const REQUEST_ID_PREVIEW_LENGTH = 8
+const ENTITY_ID_PREVIEW_LENGTH = 8
 
 const EMPTY_FILTERS = { action: '', dateFrom: '', dateTo: '' }
-
-// One-line JSON of the details, cut to the preview length
-function detailsPreview(details) {
-  const text = JSON.stringify(details)
-  return text.length > DETAILS_PREVIEW_LENGTH
-    ? `${text.slice(0, DETAILS_PREVIEW_LENGTH - 1)}…`
-    : text
-}
 
 function shortRequestId(requestId) {
   if (!requestId) return '—'
@@ -32,9 +25,9 @@ function shortRequestId(requestId) {
     : requestId
 }
 
-// "order · 9d4f6a2b-…" or just the entity type when there is no id
-function entityLabel(log) {
-  return log.entity_id ? `${log.entity_type} · ${log.entity_id}` : log.entity_type
+// First characters of the entity id; the full value goes into the title tooltip
+function shortEntityId(entityId) {
+  return String(entityId).slice(0, ENTITY_ID_PREVIEW_LENGTH)
 }
 
 function AdminLogsPage() {
@@ -283,17 +276,14 @@ function AdminLogsPage() {
                         <span className="inline-block rounded-full bg-gray-200 px-2 py-0.5 text-xs font-medium break-all">
                           {log.action}
                         </span>
-                        <span className="block mt-1 text-xs text-gray-600 break-all">
-                          {entityLabel(log)}
-                        </span>
-                        {hasDetails && (
-                          <span
-                            className="block text-xs text-gray-600 break-all"
-                            title={JSON.stringify(log.details)}
-                          >
-                            {detailsPreview(log.details)}
+                        {log.entity_id && (
+                          <span className="ml-2 text-xs text-gray-600" title={String(log.entity_id)}>
+                            {shortEntityId(log.entity_id)}
                           </span>
                         )}
+                        <span className="block mt-1 text-xs text-gray-600 break-words">
+                          {summarizeLog(log, t, formatDp)}
+                        </span>
                       </td>
                       <td
                         className="hidden lg:table-cell py-4 px-2 text-gray-600 whitespace-nowrap"
